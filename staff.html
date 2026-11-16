@@ -1,0 +1,888 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>ระบบจุดลงทะเบียนและสแกนเข้างาน (Staff & Kiosk) | สหกรณ์ออมทรัพย์พนักงาน กปน.</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600;700&family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Prompt', 'Sarabun', 'sans-serif'],
+          }
+        }
+      }
+    };
+  </script>
+
+  <!-- LINE LIFF SDK v2 -->
+  <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <!-- QRCode Generator -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <!-- HTML5 QRCode Scanner -->
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+
+  <style>
+    body {
+      font-family: 'Prompt', 'Sarabun', sans-serif;
+    }
+    #kiosk-qr-box img, #kiosk-qr-box canvas {
+      margin: 0 auto;
+      display: block;
+    }
+    /* Thermal Label Printer 80mm / 58mm CSS */
+    @media print {
+      body * {
+        visibility: hidden !important;
+      }
+      #thermal-badge-print-area, #thermal-badge-print-area * {
+        visibility: visible !important;
+      }
+      #thermal-badge-print-area {
+        position: fixed !important;
+        left: 0 !important;
+        top: 0 !important;
+        width: 78mm !important;
+        margin: 0 !important;
+        padding: 3mm !important;
+        background: white !important;
+        color: black !important;
+        box-shadow: none !important;
+        border: none !important;
+        display: block !important;
+      }
+      @page {
+        size: 80mm auto;
+        margin: 0;
+      }
+    }
+  </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col">
+
+  <!-- Top Operational Status Bar -->
+  <header class="bg-slate-950/90 border-b border-slate-800 px-4 py-3 sticky top-0 z-30">
+    <div class="max-w-5xl mx-auto flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center space-x-3">
+        <img src="assets/logo.png" alt="Logo" class="w-9 h-9 rounded-full border border-amber-400" />
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-sm font-bold text-amber-400">ระบบปฏิบัติการเจ้าหน้าที่หน้างาน (Staff & Kiosk)</h1>
+            <span id="staff-role-pill" class="hidden px-2 py-0.5 text-[10px] font-bold rounded bg-sky-500/20 text-sky-300 border border-sky-500/40">STAFF</span>
+          </div>
+          <p id="staff-name-display" class="text-xs text-slate-400">กำลังตรวจสอบสิทธิ์เจ้าหน้าที่...</p>
+        </div>
+      </div>
+
+      <!-- Connectivity & Offline Queue Badge -->
+      <div class="flex items-center gap-2">
+        <span id="network-status-pill" class="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1.5">
+          <span id="network-dot" class="w-2 h-2 rounded-full bg-emerald-400"></span>
+          <span id="network-text">ออนไลน์ (Online)</span>
+        </span>
+
+        <button id="btn-sync-queue" type="button"
+          class="px-3 py-1 rounded-full text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30 transition">
+          <span id="queue-badge-text">[ค้างส่ง: 0 รายการ]</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Workspace -->
+  <main class="flex-1 max-w-5xl w-full mx-auto p-4 space-y-5">
+
+    <!-- Unauthorized Access Gate -->
+    <section id="state-unauthorized" class="hidden bg-rose-950/60 border border-rose-500/40 rounded-2xl p-8 text-center max-w-lg mx-auto my-8 space-y-4">
+      <div class="w-16 h-16 rounded-full bg-rose-500/20 text-rose-400 flex items-center justify-center text-3xl mx-auto">⛔</div>
+      <h2 class="text-xl font-bold text-white">ไม่มีสิทธิ์เข้าใช้งานหน้านี้</h2>
+      <p id="unauthorized-reason" class="text-sm text-rose-200 leading-relaxed">
+        เฉพาะเจ้าหน้าที่ที่มีรายชื่อในตาราง <code class="bg-black/30 px-1.5 py-0.5 rounded">staff_roles</code> เท่านั้นที่สามารถใช้งานโหมด Kiosk และเครื่องสแกนได้
+      </p>
+      <div class="p-3 rounded-xl bg-black/30 text-xs text-slate-300 font-mono select-all" id="caller-uid-box"></div>
+      <div class="pt-2 flex justify-center gap-3">
+        <a href="index.html" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold">กลับหน้าสมาชิก</a>
+        <a href="admin.html" class="px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-xs font-semibold">ไปหน้า Admin เพื่อเพิ่มสิทธิ์</a>
+      </div>
+    </section>
+
+    <!-- Authorized Workspace -->
+    <div id="state-authorized" class="hidden space-y-5">
+
+      <!-- Mode Selector Tabs -->
+      <div class="grid grid-cols-2 gap-3 bg-slate-800/80 p-1.5 rounded-2xl border border-slate-700">
+        <button id="tab-btn-scanner" type="button"
+          class="py-3 px-4 rounded-xl font-bold text-sm transition bg-sky-600 text-white shadow-lg flex items-center justify-center gap-2">
+          <span>📱 โหมดเจ้าหน้าที่สแกน (Staff Scanner)</span>
+        </button>
+        <button id="tab-btn-kiosk" type="button"
+          class="py-3 px-4 rounded-xl font-bold text-sm transition text-slate-300 hover:text-white flex items-center justify-center gap-2">
+          <span>🖥️ โหมดจอตั้งโต๊ะ (Kiosk Dynamic QR)</span>
+        </button>
+      </div>
+
+      <!-- ================================================================ -->
+      <!-- MODE 1: STAFF SCANNER MODE (Rear Camera + Offline Queue)         -->
+      <!-- ================================================================ -->
+      <section id="view-staff-scanner" class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+
+        <!-- Left Column: Camera & Manual Entry -->
+        <div class="lg:col-span-7 bg-slate-800/90 border border-slate-700 rounded-2xl p-5 space-y-4">
+          <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div>
+              <h2 class="text-base font-bold text-white">สแกน E-Ticket ของสมาชิก</h2>
+              <p class="text-xs text-slate-400">ส่องกล้องหลังไปยัง QR Code บนหน้าจอมือถือของสมาชิก</p>
+            </div>
+            <!-- 4-Way Action Mode Switcher -->
+            <div class="grid grid-cols-2 sm:flex items-center bg-slate-900 p-1 rounded-xl border border-slate-700 gap-1 w-full sm:w-auto">
+              <button id="btn-action-checkin" type="button"
+                class="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 text-white transition">
+                ✓ เข้างาน
+              </button>
+              <button id="btn-action-checkout" type="button"
+                class="px-2.5 py-1.5 rounded-lg text-xs font-bold text-slate-400 hover:text-white transition">
+                ออกงาน
+              </button>
+              <button id="btn-action-souvenir" type="button"
+                class="px-2.5 py-1.5 rounded-lg text-xs font-bold text-slate-400 hover:text-white transition">
+                🎁 ของที่ระลึก
+              </button>
+              <button id="btn-action-meal" type="button"
+                class="px-2.5 py-1.5 rounded-lg text-xs font-bold text-slate-400 hover:text-white transition"
+                title="แจกอาหารว่างเมื่อสมาชิกเช็คเอาท์ออกจากที่ประชุมแล้ว">
+                🍱 รับอาหารว่าง (หลังเช็คเอาท์)
+              </button>
+            </div>
+          </div>
+
+          <!-- Camera Viewport -->
+          <div class="relative rounded-2xl overflow-hidden bg-black border-2 border-slate-700 min-h-[260px] flex items-center justify-center">
+            <div id="staff-qr-reader" class="w-full"></div>
+            <div id="camera-idle-placeholder" class="text-center p-6 space-y-3">
+              <div class="text-4xl">📷</div>
+              <p class="text-xs text-slate-400">กดปุ่ม "เปิดกล้องสแกน QR" เพื่อเริ่มสแกนต่อเนื่อง</p>
+              <button id="btn-start-staff-camera" type="button"
+                class="px-5 py-2.5 rounded-xl font-bold text-sm bg-sky-600 hover:bg-sky-500 text-white shadow-lg">
+                เปิดกล้องสแกน QR
+              </button>
+            </div>
+          </div>
+
+          <div class="flex flex-wrap gap-2">
+            <button id="btn-stop-staff-camera" type="button"
+              class="hidden px-4 py-2 rounded-xl bg-slate-700 hover:bg-slate-600 text-xs font-semibold">
+              หยุดกล้องชั่วคราว
+            </button>
+            <button id="btn-sim-offline-toggle" type="button"
+              class="px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 hover:border-amber-400 text-xs text-slate-300">
+              🔌 จำลองเน็ตหลุด (Test Offline Queue)
+            </button>
+          </div>
+
+          <!-- Manual Member No / Token Input (Fallback if phone screen is cracked) -->
+          <form id="form-manual-scan" class="pt-3 border-t border-slate-700 flex gap-2">
+            <input id="input-manual-token" type="text"
+              placeholder="กรอกเลขทะเบียนสมาชิก (เช่น 00001) หรือรหัส QR..."
+              class="flex-1 px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-sm text-white focus:border-sky-500 outline-none" />
+            <button type="submit"
+              class="px-5 py-2.5 rounded-xl font-bold text-sm bg-emerald-600 hover:bg-emerald-500 text-white shrink-0">
+              บันทึกเช็คอิน
+            </button>
+          </form>
+        </div>
+
+        <!-- Right Column: Big Audio-Visual Confirmation Card & Offline Queue List -->
+        <div class="lg:col-span-5 space-y-4">
+
+          <!-- Audio-Visual Result Card -->
+          <div id="scan-result-card" class="bg-slate-800/90 border-2 border-slate-700 rounded-2xl p-6 text-center space-y-3 transition-all">
+            <div id="result-badge-icon" class="w-20 h-20 rounded-full mx-auto flex items-center justify-center text-4xl bg-slate-700 text-slate-300 font-bold">
+              ⏳
+            </div>
+            <div id="result-status-title" class="text-xl font-extrabold text-slate-200">
+              พร้อมสแกนผู้เข้าร่วมงาน
+            </div>
+            <div id="result-attendee-name" class="text-lg font-bold text-amber-300">-</div>
+            <div class="flex items-center justify-center gap-2">
+              <span id="result-member-no" class="px-3 py-1 rounded-lg bg-slate-900 text-xs font-mono text-slate-300">เลขทะเบียน: -</span>
+              <span id="result-role-badge" class="px-3 py-1 rounded-lg bg-slate-900 text-xs font-bold text-slate-300">สถานะ: -</span>
+            </div>
+            <p id="result-timestamp" class="text-xs text-slate-400">-</p>
+
+            <!-- Quick Exit & Snack Claim Action (Shown when member hasn't checked out yet) -->
+            <div id="quick-action-container" class="hidden pt-2 border-t border-amber-500/30">
+              <button id="btn-quick-checkout-claim" type="button"
+                class="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-amber-500 via-orange-500 to-emerald-500 hover:from-amber-400 hover:to-emerald-400 text-slate-950 font-bold text-xs shadow-lg transition flex items-center justify-center gap-1.5 animate-pulse">
+                <span>🚪 เช็คเอาท์และรับอาหารว่างทันที (Check-out & Claim)</span>
+              </button>
+            </div>
+
+            <!-- Thermal Badge Print Controls -->
+            <div id="badge-print-controls" class="pt-2 border-t border-slate-700/60 space-y-2">
+              <button id="btn-print-badge" type="button" disabled
+                class="w-full py-2.5 px-3 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-40 disabled:cursor-not-allowed text-slate-950 font-bold text-xs shadow transition flex items-center justify-center gap-1.5">
+                <span>🖨️ พิมพ์ป้ายชื่อ / สติกเกอร์ (Thermal 80mm)</span>
+              </button>
+              <label class="flex items-center justify-center gap-2 text-xs text-slate-300 cursor-pointer select-none">
+                <input type="checkbox" id="chk-auto-print-badge" class="w-4 h-4 rounded text-amber-500 bg-slate-900 border-slate-700">
+                <span>พิมพ์สติกเกอร์ป้ายชื่ออัตโนมัติเมื่อเช็คอินสำเร็จ</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Pending Offline Queue Box -->
+          <div class="bg-slate-800/90 border border-slate-700 rounded-2xl p-4 space-y-3">
+            <div class="flex items-center justify-between">
+              <h3 class="text-xs font-bold uppercase tracking-wider text-amber-400">
+                รายการค้างส่งในเครื่อง (IndexedDB Offline Queue)
+              </h3>
+              <button id="btn-force-sync-now" type="button"
+                class="text-xs text-sky-400 hover:underline font-semibold">
+                ซิงค์ข้อมูลทันที 🔄
+              </button>
+            </div>
+            <div id="offline-queue-list" class="text-xs text-slate-400 space-y-1.5 max-h-44 overflow-y-auto">
+              <p class="text-slate-500 italic">ไม่มีรายการค้างส่ง</p>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- ================================================================ -->
+      <!-- MODE 2: KIOSK DISPLAY MODE (Fullscreen Rotating Dynamic QR)      -->
+      <!-- ================================================================ -->
+      <section id="view-kiosk-display" class="hidden">
+        <div class="bg-gradient-to-br from-slate-900 via-sky-950 to-slate-900 border-2 border-sky-500/40 rounded-3xl p-6 md:p-10 text-center shadow-2xl space-y-6">
+          <div class="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 pb-4">
+            <div class="text-left">
+              <span class="px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
+                ⚡ KIOSK SELF CHECK-IN (ANTI-CHEAT DYNAMIC QR)
+              </span>
+              <h2 id="kiosk-event-title" class="text-xl md:text-2xl font-extrabold text-white mt-2">
+                จุดสแกนเช็คอินเข้างานด้วยตนเอง
+              </h2>
+            </div>
+            <button id="btn-kiosk-fullscreen" type="button"
+              class="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-bold text-white border border-white/15">
+              ⛶ ขยายเต็มจอ (Fullscreen)
+            </button>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-12 gap-8 items-center">
+            <!-- Rotating QR Code Box -->
+            <div class="md:col-span-6 flex flex-col items-center justify-center space-y-4">
+              <div class="p-6 bg-white rounded-3xl shadow-2xl border-4 border-amber-400 relative">
+                <div id="kiosk-qr-box" class="w-[260px] h-[260px] flex items-center justify-center"></div>
+              </div>
+              <div class="w-full max-w-xs space-y-1.5">
+                <div class="flex justify-between text-xs text-sky-200 font-semibold">
+                  <span>เปลี่ยนรหัส QR อัตโนมัติในอีก</span>
+                  <span id="kiosk-countdown-text">20 วินาที</span>
+                </div>
+                <div class="w-full h-2.5 bg-slate-800 rounded-full overflow-hidden">
+                  <div id="kiosk-progress-bar" class="h-full bg-gradient-to-r from-emerald-400 to-sky-400 transition-all duration-500" style="width: 100%"></div>
+                </div>
+                <p id="kiosk-token-preview" class="text-[11px] font-mono text-slate-400 truncate"></p>
+              </div>
+            </div>
+
+            <!-- Member Instructions -->
+            <div class="md:col-span-6 text-left space-y-4 bg-white/5 p-6 rounded-2xl border border-white/10">
+              <h3 class="text-lg font-bold text-amber-300">ขั้นตอนการสแกนเช็คอินด้วยตนเอง</h3>
+              <ol class="space-y-3 text-sm text-slate-200">
+                <li class="flex items-start gap-3">
+                  <span class="w-6 h-6 rounded-full bg-sky-500 text-white font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">1</span>
+                  <span>เปิดแอปพลิเคชัน <strong>LINE</strong> บนมือถือของท่าน และเข้าสู่หน้าบัตร <strong>E-Ticket</strong> ของงานสัมมนา</span>
+                </li>
+                <li class="flex items-start gap-3">
+                  <span class="w-6 h-6 rounded-full bg-sky-500 text-white font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">2</span>
+                  <span>กดปุ่มสีเขียว <strong>“สแกนป้ายจุดลงทะเบียน (Kiosk QR)”</strong> บนหน้าจอมือถือของท่าน</span>
+                </li>
+                <li class="flex items-start gap-3">
+                  <span class="w-6 h-6 rounded-full bg-sky-500 text-white font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">3</span>
+                  <span>นำกล้องมือถือส่องมาที่ <strong>QR Code บนหน้าจอนี้</strong> ระบบจะยืนยันการเช็คอินทันที</span>
+                </li>
+              </ol>
+              <div class="p-3.5 rounded-xl bg-amber-500/10 border border-amber-400/30 text-xs text-amber-200 leading-relaxed">
+                🛡️ <strong>ระบบป้องกันการทุจริต:</strong> QR Code บนหน้าจอนี้เข้ารหัส HMAC-SHA256 และเปลี่ยนใหม่ทุก 20 วินาที ไม่สามารถถ่ายภาพส่งต่อให้ผู้อื่นสแกนจากภายนอกสถานที่จัดงานได้
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </div>
+
+    <!-- Thermal Sticker Label Printable Template (80mm / 58mm width) -->
+    <div id="thermal-badge-print-area" class="hidden text-black font-sans bg-white">
+      <div style="border: 2px dashed #000; padding: 3mm; border-radius: 4px; text-align: center;">
+        <div style="display: flex; align-items: center; justify-content: center; gap: 6px; margin-bottom: 2mm;">
+          <img src="assets/logo.png" style="height: 11mm; width: 11mm; object-fit: contain;" />
+          <div style="text-align: left; line-height: 1.1;">
+            <div style="font-size: 8pt; font-weight: bold;">สหกรณ์ออมทรัพย์พนักงาน กปน.</div>
+            <div style="font-size: 6.5pt; color: #444;">สัมมนาประจำปี 2569</div>
+          </div>
+        </div>
+        <div style="border-top: 1px solid #000; border-bottom: 1px solid #000; padding: 2mm 0; margin-bottom: 2mm;">
+          <div style="font-size: 7pt; text-transform: uppercase;">เลขทะเบียนสมาชิก (MEMBER NO)</div>
+          <div id="badge-member-no" style="font-size: 22pt; font-weight: 900; letter-spacing: 1px; font-family: monospace; line-height: 1;">00000</div>
+        </div>
+        <div id="badge-name" style="font-size: 13pt; font-weight: bold; margin-bottom: 1.5mm; line-height: 1.2;">ชื่อ - นามสกุล</div>
+        <div id="badge-status" style="display: inline-block; font-size: 8pt; font-weight: bold; border: 1px solid #000; padding: 1px 6px; border-radius: 10px; margin-bottom: 2mm;">พนักงาน กปน.</div>
+        <div style="display: flex; justify-content: center; margin: 1mm 0;" id="badge-qr-container"></div>
+        <div style="font-size: 6.5pt; color: #333; margin-top: 1mm;" id="badge-timestamp">เวลาเช็คอิน: -</div>
+      </div>
+    </div>
+  </main>
+
+  <script src="js/config.js"></script>
+  <script src="js/liff-helper.js"></script>
+  <script src="js/offline-queue.js"></script>
+  <script>
+    (function () {
+      let currentActionType = "CHECKIN";
+      let currentAttendee = null;
+      let staffScanner = null;
+      let lastScannedToken = "";
+      let lastScannedTime = 0;
+      let simulatedOffline = false;
+      let kioskIntervalSec = 20;
+      let kioskTimer = null;
+
+      // Thermal Badge Printer Function (80mm width standard)
+      function printThermalBadge(attendee) {
+        if (!attendee) return;
+        document.getElementById("badge-member-no").textContent = attendee.member_no || "00000";
+        document.getElementById("badge-name").textContent = attendee.full_name || "-";
+        
+        const isRetired = attendee.person_status === "RETIRED" || (attendee.person_status_label && attendee.person_status_label.includes("เกษียณ"));
+        document.getElementById("badge-status").textContent = isRetired ? "สมาชิกเกษียณอายุ (RETIRED)" : "พนักงาน กปน. (ACTIVE_MWA)";
+        document.getElementById("badge-timestamp").textContent = `เวลาเช็คอิน: ${window.formatThaiDateTime(attendee.checked_in_at || new Date().toISOString())}`;
+
+        const qrContainer = document.getElementById("badge-qr-container");
+        qrContainer.innerHTML = "";
+        new QRCode(qrContainer, {
+          text: attendee.member_no || "00000",
+          width: 95,
+          height: 95,
+          colorDark: "#000000",
+          colorLight: "#ffffff",
+          correctLevel: QRCode.CorrectLevel.M,
+        });
+
+        setTimeout(() => {
+          window.print();
+        }, 150);
+      }
+
+      // Web Audio API Synthesizer for instant Beep feedback (Zero external MP3 needed)
+      function playFeedbackSound(type) {
+        try {
+          const AudioCtx = window.AudioContext || window.webkitAudioContext;
+          const ctx = new AudioCtx();
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+
+          if (type === "SUCCESS") {
+            osc.frequency.setValueAtTime(880, ctx.currentTime);
+            osc.frequency.setValueAtTime(1320, ctx.currentTime + 0.09);
+            gain.gain.setValueAtTime(0.25, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.28);
+            osc.start();
+            osc.stop(ctx.currentTime + 0.28);
+          } else if (type === "QUEUED") {
+            osc.frequency.setValueAtTime(660, ctx.currentTime);
+            gain.gain.setValueAtTime(0.2, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.2);
+            osc.start();
+            osc.stop(ctx.currentTime + 0.2);
+          } else {
+            osc.type = "sawtooth";
+            osc.frequency.setValueAtTime(220, ctx.currentTime);
+            gain.gain.setValueAtTime(0.3, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
+            osc.start();
+            osc.stop(ctx.currentTime + 0.35);
+          }
+        } catch (_) {}
+      }
+
+      function renderResultCard({ state, title, attendee, timestampText }) {
+        const card = document.getElementById("scan-result-card");
+        const icon = document.getElementById("result-badge-icon");
+        const titleEl = document.getElementById("result-status-title");
+        const nameEl = document.getElementById("result-attendee-name");
+        const memberNoEl = document.getElementById("result-member-no");
+        const roleEl = document.getElementById("result-role-badge");
+        const timeEl = document.getElementById("result-timestamp");
+
+        titleEl.textContent = title;
+        nameEl.textContent = attendee?.full_name || "-";
+        memberNoEl.textContent = `เลขทะเบียน: ${attendee?.member_no || "-"}`;
+        roleEl.textContent =
+          attendee?.person_status === "RETIRED"
+            ? "สมาชิกเกษียณอายุ (RETIRED)"
+            : attendee?.person_status === "ACTIVE_MWA"
+              ? "พนักงาน กปน. (ACTIVE_MWA)"
+              : "สถานะ: -";
+        timeEl.textContent = timestampText || window.formatThaiDateTime(new Date().toISOString());
+
+        if (state === "SUCCESS") {
+          card.className = "bg-emerald-950/90 border-2 border-emerald-400 rounded-2xl p-6 text-center space-y-3 transition-all shadow-2xl";
+          icon.className = "w-20 h-20 rounded-full mx-auto flex items-center justify-center text-4xl bg-emerald-500 text-white font-bold";
+          icon.textContent = "✓";
+        } else if (state === "DUPLICATE") {
+          card.className = "bg-amber-950/90 border-2 border-amber-400 rounded-2xl p-6 text-center space-y-3 transition-all shadow-2xl";
+          icon.className = "w-20 h-20 rounded-full mx-auto flex items-center justify-center text-4xl bg-amber-500 text-slate-950 font-bold";
+          icon.textContent = "!";
+        } else if (state === "OFFLINE_QUEUED") {
+          card.className = "bg-sky-950/90 border-2 border-sky-400 rounded-2xl p-6 text-center space-y-3 transition-all shadow-2xl";
+          icon.className = "w-20 h-20 rounded-full mx-auto flex items-center justify-center text-4xl bg-sky-500 text-white font-bold";
+          icon.textContent = "📥";
+        } else {
+          card.className = "bg-rose-950/90 border-2 border-rose-500 rounded-2xl p-6 text-center space-y-3 transition-all shadow-2xl";
+          icon.className = "w-20 h-20 rounded-full mx-auto flex items-center justify-center text-4xl bg-rose-600 text-white font-bold";
+          icon.textContent = "✕";
+        }
+      }
+
+      function updateNetworkUI() {
+        const isOnline = navigator.onLine && !simulatedOffline;
+        const pill = document.getElementById("network-status-pill");
+        const dot = document.getElementById("network-dot");
+        const text = document.getElementById("network-text");
+
+        if (isOnline) {
+          pill.className = "px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1.5";
+          dot.className = "w-2 h-2 rounded-full bg-emerald-400";
+          text.textContent = "ออนไลน์ (Online)";
+        } else {
+          pill.className = "px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-500/20 text-rose-300 border border-rose-500/30 flex items-center gap-1.5";
+          dot.className = "w-2 h-2 rounded-full bg-rose-400 animate-ping";
+          text.textContent = "ออฟไลน์ (Offline Mode)";
+        }
+      }
+
+      window.addEventListener("online", updateNetworkUI);
+      window.addEventListener("offline", updateNetworkUI);
+
+      // Process a scanned or manually entered QR token
+      async function processStaffScan(rawToken, overrideActionType) {
+        const cleanToken = String(rawToken || "").trim();
+        if (!cleanToken) return;
+
+        const effectiveAction = overrideActionType || currentActionType;
+
+        // Debounce identical scan within 2.5 seconds (unless overriding action)
+        const now = Date.now();
+        if (!overrideActionType && cleanToken === lastScannedToken && now - lastScannedTime < 2500) {
+          return;
+        }
+        lastScannedToken = cleanToken;
+        lastScannedTime = now;
+
+        const isOnline = navigator.onLine && !simulatedOffline;
+
+        // Reset quick action button
+        const quickActionBox = document.getElementById("quick-action-container");
+        if (quickActionBox) quickActionBox.classList.add("hidden");
+
+        if (!isOnline) {
+          await window.OfflineQueue.enqueue({
+            target_qr_token: cleanToken,
+            action_type: effectiveAction,
+          });
+          playFeedbackSound("QUEUED");
+          renderResultCard({
+            state: "OFFLINE_QUEUED",
+            title: "บันทึกลงคิวออฟไลน์แล้ว",
+            attendee: {
+              full_name: "รอซิงค์ข้อมูลเมื่ออินเทอร์เน็ตกลับมา",
+              member_no: cleanToken,
+              person_status: "-",
+            },
+            timestampText: `บันทึกเมื่อ ${window.formatThaiDateTime(new Date().toISOString())}`,
+          });
+          return;
+        }
+
+        try {
+          const res = await window.invokeEdgeFunction("checkin", {
+            idToken: window.LiffHelper.getIdToken(),
+            mode: "STAFF",
+            action_type: effectiveAction,
+            target_qr_token: cleanToken,
+          });
+
+          currentAttendee = res.attendee;
+          document.getElementById("btn-print-badge").disabled = false;
+
+          const isDup = res.already_checked_in || res.already_checked_out || res.already_claimed;
+          playFeedbackSound(isDup ? "QUEUED" : "SUCCESS");
+
+          let timeLabel = `เวลาเช็คอิน: ${window.formatThaiDateTime(res.attendee?.checked_in_at)}`;
+          if (effectiveAction === "CLAIM_SOUVENIR") {
+            timeLabel = `เวลารับของที่ระลึก: ${window.formatThaiDateTime(res.attendee?.souvenir_received_at)}`;
+          } else if (effectiveAction === "CLAIM_MEAL") {
+            timeLabel = `เวลารับอาหารว่าง: ${window.formatThaiDateTime(res.attendee?.meal_voucher_received_at)}`;
+          } else if (effectiveAction === "CHECKOUT") {
+            timeLabel = `เวลาเช็คเอาท์: ${window.formatThaiDateTime(res.attendee?.checked_out_at)}`;
+          } else if (effectiveAction === "CHECKOUT_AND_CLAIM_MEAL") {
+            timeLabel = `เวลาเช็คเอาท์ & รับอาหารว่าง: ${window.formatThaiDateTime(res.attendee?.meal_voucher_received_at || res.attendee?.checked_out_at)}`;
+          }
+
+          renderResultCard({
+            state: isDup ? "DUPLICATE" : "SUCCESS",
+            title: res.message || "บันทึกสำเร็จ",
+            attendee: res.attendee,
+            timestampText: timeLabel,
+          });
+
+          // Auto-print thermal badge if enabled and check-in is successful and fresh
+          if (effectiveAction === "CHECKIN" && !isDup) {
+            const autoPrintChk = document.getElementById("chk-auto-print-badge");
+            if (autoPrintChk && autoPrintChk.checked) {
+              setTimeout(() => {
+                printThermalBadge(res.attendee);
+              }, 300);
+            }
+          }
+        } catch (err) {
+          // If network fetch failed (TypeError), automatically fall back to IndexedDB Offline Queue
+          if (err.name === "TypeError" || !navigator.onLine) {
+            await window.OfflineQueue.enqueue({
+              target_qr_token: cleanToken,
+              action_type: effectiveAction,
+            });
+            playFeedbackSound("QUEUED");
+            renderResultCard({
+              state: "OFFLINE_QUEUED",
+              title: "การเชื่อมต่อขัดข้อง - เก็บลงคิวออฟไลน์แล้ว",
+              attendee: {
+                full_name: "ระบบจะส่งข้อมูลอัตโนมัติเมื่อสัญญาณปกติ",
+                member_no: cleanToken,
+              },
+            });
+            return;
+          }
+
+          playFeedbackSound("ERROR");
+
+          // Check if checkout is required before claiming meal
+          const requiresCheckout = Boolean(
+            err.require_checkout ||
+            err.data?.require_checkout ||
+            (err.message && err.message.includes("กรุณาเช็คเอาท์ก่อนรับอาหารว่าง"))
+          );
+
+          if (requiresCheckout && quickActionBox) {
+            quickActionBox.classList.remove("hidden");
+            const btnQuick = document.getElementById("btn-quick-checkout-claim");
+            btnQuick.onclick = () => {
+              processStaffScan(cleanToken, "CHECKOUT_AND_CLAIM_MEAL");
+            };
+          }
+
+          renderResultCard({
+            state: "ERROR",
+            title: err.message || "ไม่พบข้อมูลสมาชิก",
+            attendee: err.attendee || err.data?.attendee || { full_name: "กรุณาตรวจสอบ QR Code", member_no: cleanToken },
+          });
+        }
+      }
+
+      // Bind OfflineQueue UI listener
+      window.OfflineQueue.onChange((count, isSyncing, items) => {
+        const badgeText = document.getElementById("queue-badge-text");
+        badgeText.textContent = isSyncing
+          ? `[กำลังซิงค์ข้อมูล... (${count})]`
+          : `[ค้างส่ง: ${count} รายการ]`;
+
+        const listEl = document.getElementById("offline-queue-list");
+        if (!items || items.length === 0) {
+          listEl.innerHTML = `<p class="text-slate-500 italic">ไม่มีรายการค้างส่ง</p>`;
+          return;
+        }
+        listEl.innerHTML = items
+          .map(
+            (item) => `
+            <div class="flex items-center justify-between bg-slate-900 px-3 py-1.5 rounded-lg border border-slate-700">
+              <span class="font-mono text-amber-300 truncate max-w-[180px]">${item.target_qr_token}</span>
+              <span class="text-[10px] text-slate-400">${window.formatThaiDateTime(item.scanned_at)}</span>
+            </div>
+          `,
+          )
+          .join("");
+      });
+
+      // Manual Sync Button
+      const triggerManualSync = async () => {
+        if (simulatedOffline) {
+          simulatedOffline = false;
+          updateNetworkUI();
+        }
+        await window.OfflineQueue.syncAll(
+          () => window.LiffHelper.getIdToken(),
+          (item, res, err) => {
+            if (res && res.attendee) {
+              renderResultCard({
+                state: "SUCCESS",
+                title: `ซิงค์สำเร็จ: ${res.message}`,
+                attendee: res.attendee,
+              });
+            }
+          },
+        );
+      };
+      document.getElementById("btn-sync-queue").addEventListener("click", triggerManualSync);
+      document.getElementById("btn-force-sync-now").addEventListener("click", triggerManualSync);
+
+      // Toggle Simulated Offline Mode for testing IndexedDB
+      document.getElementById("btn-sim-offline-toggle").addEventListener("click", (e) => {
+        simulatedOffline = !simulatedOffline;
+        updateNetworkUI();
+        e.currentTarget.textContent = simulatedOffline
+          ? "🌐 กู้คืนสัญญาณออนไลน์ (ซิงค์อัตโนมัติ)"
+          : "🔌 จำลองเน็ตหลุด (Test Offline Queue)";
+        if (!simulatedOffline) {
+          triggerManualSync();
+        }
+      });
+
+      // 4-Way Action Mode Switcher
+      const btnIn = document.getElementById("btn-action-checkin");
+      const btnOut = document.getElementById("btn-action-checkout");
+      const btnSouvenir = document.getElementById("btn-action-souvenir");
+      const btnMeal = document.getElementById("btn-action-meal");
+
+      function updateActionButtonsUI() {
+        const defaultStyle = "px-2.5 py-1.5 rounded-lg text-xs font-bold text-slate-400 hover:text-white transition";
+        btnIn.className = defaultStyle;
+        btnOut.className = defaultStyle;
+        btnSouvenir.className = defaultStyle;
+        btnMeal.className = defaultStyle;
+
+        if (currentActionType === "CHECKIN") {
+          btnIn.className = "px-2.5 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 text-white shadow transition";
+        } else if (currentActionType === "CHECKOUT") {
+          btnOut.className = "px-2.5 py-1.5 rounded-lg text-xs font-bold bg-indigo-600 text-white shadow transition";
+        } else if (currentActionType === "CLAIM_SOUVENIR") {
+          btnSouvenir.className = "px-2.5 py-1.5 rounded-lg text-xs font-bold bg-amber-600 text-white shadow transition";
+        } else if (currentActionType === "CLAIM_MEAL") {
+          btnMeal.className = "px-2.5 py-1.5 rounded-lg text-xs font-bold bg-teal-600 text-white shadow transition";
+        }
+      }
+
+      btnIn.addEventListener("click", () => {
+        currentActionType = "CHECKIN";
+        updateActionButtonsUI();
+      });
+      btnOut.addEventListener("click", () => {
+        currentActionType = "CHECKOUT";
+        updateActionButtonsUI();
+      });
+      btnSouvenir.addEventListener("click", () => {
+        currentActionType = "CLAIM_SOUVENIR";
+        updateActionButtonsUI();
+      });
+      btnMeal.addEventListener("click", () => {
+        currentActionType = "CLAIM_MEAL";
+        updateActionButtonsUI();
+      });
+
+      // Manual Print Badge Button Listener
+      document.getElementById("btn-print-badge").addEventListener("click", () => {
+        if (currentAttendee) {
+          printThermalBadge(currentAttendee);
+        }
+      });
+
+      // Manual Form Submit
+      document.getElementById("form-manual-scan").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const input = document.getElementById("input-manual-token");
+        const val = input.value;
+        if (!val.trim()) return;
+        input.value = "";
+        await processStaffScan(val);
+      });
+
+      // Staff Rear Camera Controls
+      document.getElementById("btn-start-staff-camera").addEventListener("click", async () => {
+        document.getElementById("camera-idle-placeholder").classList.add("hidden");
+        document.getElementById("btn-stop-staff-camera").classList.remove("hidden");
+        try {
+          staffScanner = new Html5Qrcode("staff-qr-reader");
+          await staffScanner.start(
+            { facingMode: "environment" },
+            { fps: 12, qrbox: { width: 240, height: 240 } },
+            (decodedText) => {
+              processStaffScan(decodedText);
+            },
+            () => {},
+          );
+        } catch (err) {
+          document.getElementById("camera-idle-placeholder").classList.remove("hidden");
+          document.getElementById("btn-stop-staff-camera").classList.add("hidden");
+          renderResultCard({
+            state: "ERROR",
+            title: "ไม่สามารถเปิดกล้องได้ (สามารถพิมพ์เลขสมาชิกด้านล่างแทนได้)",
+            attendee: { full_name: err.message || "Camera Permission Denied", member_no: "-" },
+          });
+        }
+      });
+
+      document.getElementById("btn-stop-staff-camera").addEventListener("click", async () => {
+        if (staffScanner) {
+          try {
+            await staffScanner.stop();
+            staffScanner.clear();
+          } catch (_) {}
+          staffScanner = null;
+        }
+        document.getElementById("camera-idle-placeholder").classList.remove("hidden");
+        document.getElementById("btn-stop-staff-camera").classList.add("hidden");
+      });
+
+      // Kiosk Rotating Dynamic QR Logic
+      let lastRenderedBucket = -1;
+      async function refreshKioskQrTick() {
+        const nowSec = Math.floor(Date.now() / 1000);
+        const bucket = Math.floor(nowSec / kioskIntervalSec);
+        const elapsedInBucket = nowSec % kioskIntervalSec;
+        const remainingSec = kioskIntervalSec - elapsedInBucket;
+
+        document.getElementById("kiosk-countdown-text").textContent = `${remainingSec} วินาที`;
+        const pct = Math.max(5, (remainingSec / kioskIntervalSec) * 100);
+        document.getElementById("kiosk-progress-bar").style.width = `${pct}%`;
+
+        if (bucket !== lastRenderedBucket) {
+          lastRenderedBucket = bucket;
+          const token = await window.generateKioskDynamicToken(kioskIntervalSec);
+          const qrBox = document.getElementById("kiosk-qr-box");
+          qrBox.innerHTML = "";
+          new QRCode(qrBox, {
+            text: token,
+            width: 240,
+            height: 240,
+            colorDark: "#082f49",
+            colorLight: "#ffffff",
+            correctLevel: QRCode.CorrectLevel.M,
+          });
+          document.getElementById("kiosk-token-preview").textContent = token;
+        }
+      }
+
+      // Tab Switching (Staff Scanner vs Kiosk Display)
+      const tabScanner = document.getElementById("tab-btn-scanner");
+      const tabKiosk = document.getElementById("tab-btn-kiosk");
+      const viewScanner = document.getElementById("view-staff-scanner");
+      const viewKiosk = document.getElementById("view-kiosk-display");
+
+      tabScanner.addEventListener("click", () => {
+        tabScanner.className = "py-3 px-4 rounded-xl font-bold text-sm transition bg-sky-600 text-white shadow-lg flex items-center justify-center gap-2";
+        tabKiosk.className = "py-3 px-4 rounded-xl font-bold text-sm transition text-slate-300 hover:text-white flex items-center justify-center gap-2";
+        viewScanner.classList.remove("hidden");
+        viewKiosk.classList.add("hidden");
+        if (kioskTimer) {
+          clearInterval(kioskTimer);
+          kioskTimer = null;
+        }
+      });
+
+      tabKiosk.addEventListener("click", () => {
+        tabKiosk.className = "py-3 px-4 rounded-xl font-bold text-sm transition bg-emerald-600 text-white shadow-lg flex items-center justify-center gap-2";
+        tabScanner.className = "py-3 px-4 rounded-xl font-bold text-sm transition text-slate-300 hover:text-white flex items-center justify-center gap-2";
+        viewKiosk.classList.remove("hidden");
+        viewScanner.classList.add("hidden");
+        lastRenderedBucket = -1;
+        refreshKioskQrTick();
+        if (!kioskTimer) {
+          kioskTimer = setInterval(refreshKioskQrTick, 1000);
+        }
+      });
+
+      document.getElementById("btn-kiosk-fullscreen").addEventListener("click", () => {
+        if (!document.fullscreenElement) {
+          document.documentElement.requestFullscreen().catch(() => {});
+        } else {
+          document.exitFullscreen().catch(() => {});
+        }
+      });
+
+      // Bootstrap Staff Authentication & Role Check
+      async function bootstrap() {
+        updateNetworkUI();
+        try {
+          const auth = await window.LiffHelper.init(
+            window.APP_CONFIG.LIFF_ID_STAFF,
+            "STAFF",
+          );
+          if (!auth) return;
+
+          const res = await window.invokeEdgeFunction("checkin", {
+            idToken: auth.idToken,
+            mode: "VERIFY_STAFF",
+          });
+
+          if (!res.authorized) {
+            throw new Error(res.error || "Unauthorized");
+          }
+
+          document.getElementById("staff-name-display").textContent =
+            `${res.staff.display_name} (${res.staff.line_user_id})`;
+          const rolePill = document.getElementById("staff-role-pill");
+          rolePill.textContent = res.staff.role;
+          rolePill.classList.remove("hidden");
+
+          if (res.settings?.dynamic_qr_interval_sec) {
+            kioskIntervalSec = res.settings.dynamic_qr_interval_sec;
+          }
+          if (res.settings?.event_name) {
+            document.getElementById("kiosk-event-title").textContent =
+              res.settings.event_name;
+          }
+          if (res.settings?.auto_print_badge) {
+            const autoPrintChk = document.getElementById("chk-auto-print-badge");
+            if (autoPrintChk) autoPrintChk.checked = true;
+          }
+
+          document.getElementById("state-authorized").classList.remove("hidden");
+
+          // Start background offline queue synchronization
+          window.OfflineQueue.initAutoSync(
+            () => window.LiffHelper.getIdToken(),
+            (item, syncRes) => {
+              if (syncRes?.attendee) {
+                renderResultCard({
+                  state: "SUCCESS",
+                  title: `ซิงค์ข้อมูลออฟไลน์สำเร็จ`,
+                  attendee: syncRes.attendee,
+                });
+              }
+            },
+          );
+        } catch (err) {
+          document.getElementById("staff-name-display").textContent = "ปฏิเสธการเข้าถึง";
+          document.getElementById("unauthorized-reason").textContent = err.message;
+          document.getElementById("caller-uid-box").textContent =
+            `LINE User ID ของท่าน: ${window.LiffHelper.profile?.userId || "Unknown"}`;
+          document.getElementById("state-unauthorized").classList.remove("hidden");
+        }
+      }
+
+      bootstrap();
+    })();
+  </script>
+</body>
+</html>

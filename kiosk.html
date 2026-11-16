@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>จอ QR เช็คอิน/เช็คเอาท์ (iPad) | สหกรณ์ออมทรัพย์พนักงาน กปน.</title>
+  <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { theme: { extend: { fontFamily: { sans: ['Prompt', 'sans-serif'] }, colors: { mwa: { navy: '#083AA9', blue: '#1363DF', sky: '#47B5FF', cyan: '#00B4D8', deep: '#003B93' } } } } };</script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="js/config.js"></script>
+  <style>.tnum { font-variant-numeric: tabular-nums; }</style>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans min-h-screen flex flex-col">
+  <!-- scomwa.com style header -->
+  <header class="w-full bg-white border-b-4 border-mwa-blue shadow-sm">
+    <div class="max-w-5xl mx-auto px-4 py-3 flex items-center gap-3">
+      <img src="assets/logo.png" alt="ตราสหกรณ์" class="h-14 w-14 shrink-0" />
+      <div class="leading-tight">
+        <p class="text-base sm:text-lg font-bold text-mwa-navy">สหกรณ์ออมทรัพย์พนักงานการประปานครหลวง จำกัด</p>
+        <p class="text-[11px] sm:text-xs text-slate-500">Saving Cooperative Of Metropolitan Waterworks Authority Limited</p>
+      </div>
+    </div>
+  </header>
+  <main class="flex-1 flex items-center justify-center p-4">
+  <!-- PIN gate (skipped if this device was unlocked before) -->
+  <form id="locked" class="hidden w-full max-w-xs space-y-4 text-center">
+    <h1 class="text-xl font-bold text-mwa-navy">จอ QR สำหรับเจ้าหน้าที่</h1>
+    <p class="text-sm text-slate-500">ใส่ PIN เจ้าหน้าที่เพื่อเปิดจอ</p>
+    <input id="pin" type="password" inputmode="numeric" autocomplete="off"
+      class="w-full rounded-xl px-4 py-3 text-center text-2xl tracking-widest text-slate-900 border border-slate-300" />
+    <p id="pinErr" class="hidden text-sm text-rose-600">PIN ไม่ถูกต้อง</p>
+    <button class="w-full rounded-xl py-3 font-bold bg-mwa-blue hover:bg-mwa-navy text-white">เปิดจอ</button>
+  </form>
+
+  <!-- QR display -->
+  <section id="screen" class="hidden w-full max-w-lg text-center space-y-5">
+    <div id="badge" class="inline-block px-5 py-2 rounded-full text-lg font-bold"></div>
+    <h1 id="head" class="text-3xl font-extrabold text-mwa-navy"></h1>
+    <p class="text-slate-500">สแกน QR ด้วยกล้องมือถือ แล้วกรอกเลขสมาชิกและชื่อ-นามสกุล</p>
+
+    <!-- Status: check-in and check-out shown separately, with live countdowns -->
+    <div class="grid grid-cols-2 gap-3 text-left">
+      <div id="boxIn" class="rounded-2xl border p-3 space-y-1">
+        <p class="text-sm font-bold text-mwa-blue">เช็คอิน (เข้า)</p>
+        <p id="stIn" class="text-sm font-semibold">-</p>
+        <p id="cdIn" class="text-lg font-bold tnum"></p>
+        <p id="subIn" class="text-xs text-slate-500"></p>
+      </div>
+      <div id="boxOut" class="rounded-2xl border p-3 space-y-1">
+        <p class="text-sm font-bold text-emerald-700">เช็คเอาท์ (ออก)</p>
+        <p id="stOut" class="text-sm font-semibold">-</p>
+        <p id="cdOut" class="text-lg font-bold tnum"></p>
+        <p id="subOut" class="text-xs text-slate-500"></p>
+      </div>
+    </div>
+
+    <div class="relative inline-block bg-white p-5 rounded-3xl border-4 border-mwa-blue shadow-lg">
+      <div class="relative w-[300px] h-[300px]">
+        <div id="qr" class="w-[300px] h-[300px]"></div>
+        <img src="assets/logo.png" alt="" class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[66px] h-[66px] bg-white rounded-full p-1 pointer-events-none">
+      </div>
+      <div id="closedOverlay" class="hidden absolute inset-0 rounded-3xl bg-white/95 flex flex-col items-center justify-center p-6">
+        <p id="closedIcon" class="text-4xl">⏸️</p>
+        <p id="closedText" class="text-xl font-bold mt-2 text-mwa-navy"></p>
+        <p id="closedCd" class="text-4xl font-extrabold mt-3 text-mwa-blue tnum"></p>
+        <p id="closedSub" class="text-sm text-slate-500 mt-2"></p>
+      </div>
+    </div>
+    <div class="w-full max-w-xs mx-auto space-y-1.5">
+      <div class="flex justify-between text-sm text-mwa-navy font-semibold">
+        <span>เปลี่ยนรหัส QR อัตโนมัติในอีก</span>
+        <span id="countdown" class="tnum">-</span>
+      </div>
+      <div class="w-full h-2.5 bg-slate-200 rounded-full overflow-hidden">
+        <div id="bar" class="h-full bg-gradient-to-r from-mwa-cyan to-mwa-blue transition-all duration-1000 ease-linear" style="width:100%"></div>
+      </div>
+    </div>
+    <p id="status" class="text-xs text-slate-500"></p>
+  </section>
+  </main>
+  <footer class="bg-mwa-blue text-white text-center text-xs py-2">สหกรณ์ออมทรัพย์พนักงานการประปานครหลวง จำกัด</footer>
+
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  // ?a=out → check-out screen (use a second iPad at the exit); default is check-in
+  var action = new URLSearchParams(location.search).get("a") === "out" ? "CHECKOUT" : "CHECKIN";
+  var out = action === "CHECKOUT";
+  // folder of this page, whether served as /kiosk.html or /kiosk (Cloudflare pretty URLs)
+  var base = location.origin + location.pathname.replace(/[^/]*$/, "");
+  var pin = "";
+  try { pin = localStorage.getItem("MWA_KIOSK_PIN") || ""; } catch (_) {}
+  if (!pin) pin = "690606"; // no PIN prompt: open the QR screen directly (the form still checks member no + name)
+
+  var timer = null;
+  var intervalSec = 20;     // from the admin setting (dynamic_qr_interval_sec)
+  var remaining = 0;
+  var busy = false;
+  var status = null;        // last status from the server
+  var clockSkew = 0;        // server time minus this iPad's clock (ms)
+  var lastStates = "";      // to refresh right away when a step opens/closes by schedule
+
+  function now() { return Date.now() + clockSkew; }
+
+  function fmtTime(iso) {
+    try {
+      return new Date(iso).toLocaleString("th-TH", { timeZone: "Asia/Bangkok", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) + " น.";
+    } catch (_) { return ""; }
+  }
+
+  function fmtLeft(ms) {
+    var s = Math.max(0, Math.ceil(ms / 1000));
+    var d = Math.floor(s / 86400); s -= d * 86400;
+    var h = Math.floor(s / 3600); s -= h * 3600;
+    var m = Math.floor(s / 60); s -= m * 60;
+    var p = function (n) { return String(n).padStart(2, "0"); };
+    return (d ? d + " วัน " : "") + p(h) + ":" + p(m) + ":" + p(s);
+  }
+
+  // Same rule as the server: switch ON and inside the [opens_at, closes_at) window
+  function stateOf(st) {
+    if (!st || !st.enabled) return "OFF";
+    var t = now();
+    if (st.opens_at && t < Date.parse(st.opens_at)) return "NOT_YET";
+    if (st.closes_at && t >= Date.parse(st.closes_at)) return "ENDED";
+    return "OPEN";
+  }
+
+  function paintStatus() {
+    if (!status) return;
+    var states = [];
+    [["In", status.checkin, false], ["Out", status.checkout, true]].forEach(function (x) {
+      var k = x[0], st = x[1] || {}, isThisScreen = x[2] === out, s = stateOf(st);
+      states.push(s);
+      var label = "", cd = "", sub = "", color = "text-rose-600";
+      if (s === "OFF") { label = "🔴 ปิดอยู่"; }
+      else if (s === "NOT_YET") {
+        label = "🟡 จะเปิดในอีก"; color = "text-amber-600";
+        cd = fmtLeft(Date.parse(st.opens_at) - now());
+        sub = "เปิด " + fmtTime(st.opens_at) + (st.closes_at ? " · ปิด " + fmtTime(st.closes_at) : "");
+      } else if (s === "ENDED") {
+        label = "⚪ ปิดรับแล้ว"; color = "text-slate-500";
+        sub = "ปิดเมื่อ " + fmtTime(st.closes_at);
+      } else {
+        label = "🟢 เปิดอยู่"; color = "text-emerald-600";
+        var since = [st.opened_at, st.opens_at].filter(Boolean).map(Date.parse).sort().pop();
+        if (st.closes_at) {
+          cd = "ปิดในอีก " + fmtLeft(Date.parse(st.closes_at) - now());
+          sub = "ปิด " + fmtTime(st.closes_at);
+        }
+        if (since) sub = "เปิดตั้งแต่ " + fmtTime(new Date(since).toISOString()) + (sub ? " · " + sub : "");
+      }
+      $("st" + k).textContent = label;
+      $("st" + k).className = "text-sm font-semibold " + color;
+      $("cd" + k).textContent = cd;
+      $("cd" + k).className = "text-lg font-bold tnum " + color;
+      $("sub" + k).textContent = sub;
+      $("box" + k).className = "rounded-2xl border p-3 space-y-1 " +
+        (isThisScreen ? "border-mwa-blue bg-white shadow" : "border-slate-200 bg-white opacity-60");
+
+      if (isThisScreen) {
+        var closed = s !== "OPEN";
+        $("closedOverlay").classList.toggle("hidden", !closed);
+        var name = out ? "เช็คเอาท์" : "เช็คอิน";
+        if (s === "NOT_YET") {
+          $("closedIcon").textContent = "⏳";
+          $("closedText").textContent = "เปิด" + name + "ในอีก";
+          $("closedCd").textContent = fmtLeft(Date.parse(st.opens_at) - now());
+          $("closedSub").textContent = "เปิด " + fmtTime(st.opens_at);
+        } else if (s === "ENDED") {
+          $("closedIcon").textContent = "✅";
+          $("closedText").textContent = "ปิดรับการ" + name + "แล้ว";
+          $("closedCd").textContent = "";
+          $("closedSub").textContent = "ปิดเมื่อ " + fmtTime(st.closes_at);
+        } else {
+          $("closedIcon").textContent = "⏸️";
+          $("closedText").textContent = "ยังไม่เปิด" + name;
+          $("closedCd").textContent = "";
+          $("closedSub").textContent = "";
+        }
+      }
+    });
+    var joined = states.join(",");
+    if (lastStates && joined !== lastStates) remaining = 0; // a step just opened/closed: fetch a fresh QR + status now
+    lastStates = joined;
+  }
+
+  function paintCountdown() {
+    $("countdown").textContent = remaining + " วินาที";
+    $("bar").style.width = Math.max(0, (remaining / intervalSec) * 100) + "%";
+  }
+
+  async function tick() {
+    if (busy) return;
+    remaining -= 1;
+    paintStatus();
+    if (remaining <= 0) {
+      busy = true;
+      await refreshQr();
+      busy = false;
+    }
+    paintCountdown();
+  }
+
+  function lock(showErr) {
+    try { localStorage.removeItem("MWA_KIOSK_PIN"); } catch (_) {}
+    if (timer) { clearInterval(timer); timer = null; }
+    $("screen").classList.add("hidden"); $("locked").classList.remove("hidden");
+    $("pinErr").classList.toggle("hidden", !showErr);
+  }
+
+  async function refreshQr() {
+    try {
+      var r = await window.invokeEdgeFunction("checkin", { mode: "SELF_TOKEN", action_type: action, pin: pin });
+      var box = $("qr"); box.innerHTML = "";
+      new QRCode(box, { text: base + "self.html?t=" + encodeURIComponent(r.self_token), width: 300, height: 300, correctLevel: QRCode.CorrectLevel.H });
+      if (r.server_now) clockSkew = Date.parse(r.server_now) - Date.now();
+      status = r.status || null;
+      paintStatus();
+      intervalSec = Math.min(300, Math.max(5, parseInt(r.interval_sec, 10) || 20));
+      remaining = intervalSec;
+      $("status").textContent = "อัปเดตล่าสุด " + new Date().toLocaleTimeString("th-TH");
+      return true;
+    } catch (ex) {
+      if (ex.status === 403) { lock(true); return false; }   // wrong or changed PIN
+      remaining = 5;  // retry soon
+      $("status").textContent = "เชื่อมต่อไม่ได้: " + ex.message + " (จะลองใหม่)";
+      return true;
+    }
+  }
+
+  async function start() {
+    $("badge").textContent = out ? "เช็คเอาท์ (ออก)" : "เช็คอิน (เข้า)";
+    $("badge").className = "inline-block px-5 py-2 rounded-full text-lg font-bold " + (out ? "bg-emerald-600 text-white" : "bg-mwa-blue text-white");
+    $("head").textContent = out ? "สแกนเพื่อเช็คเอาท์ออกจากสัมมนา" : "สแกนเพื่อเช็คอินเข้าสัมมนา";
+    $("locked").classList.add("hidden"); $("screen").classList.remove("hidden");
+    if (await refreshQr()) {
+      try { localStorage.setItem("MWA_KIOSK_PIN", pin); } catch (_) {}
+      paintCountdown();
+      timer = setInterval(tick, 1000);
+    }
+  }
+
+  $("locked").addEventListener("submit", function (e) {
+    e.preventDefault();
+    pin = $("pin").value.trim();
+    if (pin) start();
+  });
+
+  if (pin) start(); else lock(false);
+})();
+</script>
+</body>
+</html>

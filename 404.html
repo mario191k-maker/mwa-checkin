@@ -1,0 +1,1034 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>ระบบลงทะเบียนและบัตรเข้างานสัมมนา (E-Ticket) | สหกรณ์ออมทรัพย์พนักงาน กปน. จำกัด</title>
+
+  <!-- Google Fonts: Sarabun & Prompt for crisp Thai typography -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600;700&family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+  <!-- TailwindCSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Prompt', 'Sarabun', 'sans-serif'],
+            body: ['Sarabun', 'sans-serif'],
+          },
+          colors: {
+            mwa: {
+              50: '#f0f9ff',
+              100: '#e0f2fe',
+              500: '#0284c7',
+              600: '#0369a1',
+              700: '#075985',
+              800: '#0c4a6e',
+              900: '#082f49',
+            }
+          }
+        }
+      }
+    };
+  </script>
+
+  <!-- LINE LIFF SDK v2 -->
+  <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <!-- QRCode Generator (qrcodejs) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <!-- HTML5 QRCode Scanner -->
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <!-- jsPDF for Client-Side Certificate Generation -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+  <style>
+    body {
+      font-family: 'Prompt', 'Sarabun', sans-serif;
+      background: linear-gradient(160deg, #082f49 0%, #0c4a6e 45%, #0369a1 100%);
+      min-height: 100vh;
+    }
+    .eticket-perforation {
+      background-image: radial-gradient(circle at 0 50%, #0c4a6e 12px, transparent 13px),
+                        radial-gradient(circle at 100% 50%, #0c4a6e 12px, transparent 13px);
+    }
+    #eticket-qrcode img, #eticket-qrcode canvas {
+      margin: 0 auto;
+      display: block;
+    }
+  </style>
+</head>
+<body class="text-slate-800 antialiased pb-12">
+
+  <!-- Top Navigation / Header -->
+  <header class="bg-slate-900/60 backdrop-blur-md border-b border-white/10 text-white sticky top-0 z-30">
+    <div class="max-w-md mx-auto px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <img src="assets/logo.png" alt="MWA Coop Logo" class="w-10 h-10 rounded-full border-2 border-amber-400 shadow" />
+        <div>
+          <h1 class="text-sm font-bold leading-tight text-amber-300">สหกรณ์ออมทรัพย์พนักงาน กปน.</h1>
+          <p id="header-event-name" class="text-xs text-sky-100 truncate max-w-[210px]">ระบบลงทะเบียนและเช็คอินสัมมนา</p>
+        </div>
+      </div>
+      <div id="user-pill" class="hidden items-center space-x-2 bg-white/10 px-2.5 py-1 rounded-full border border-white/15">
+        <img id="user-avatar" src="assets/logo.png" alt="Avatar" class="w-6 h-6 rounded-full object-cover" />
+        <span id="user-display-name" class="text-xs font-medium max-w-[85px] truncate">สมาชิก</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Announcement Marquee Banner -->
+  <div id="announcement-banner" class="hidden bg-amber-400/95 text-slate-900 px-4 py-2 text-xs font-medium shadow-sm">
+    <div class="max-w-md mx-auto flex items-start space-x-2">
+      <span class="font-bold shrink-0">📢 ประกาศ:</span>
+      <span id="announcement-text" class="leading-relaxed"></span>
+    </div>
+  </div>
+
+  <!-- Main Container (Mobile First max-w-md) -->
+  <main class="max-w-md mx-auto px-4 pt-5 space-y-5">
+
+    <!-- Demo Mode Banner (Shown automatically when testing without LINE LIFF ID / Supabase URL) -->
+    <div id="demo-mode-bar" class="hidden bg-sky-950/90 border border-sky-400/40 rounded-xl p-3 text-xs text-sky-100 shadow-lg">
+      <div class="flex items-center justify-between mb-1.5">
+        <span class="font-semibold text-amber-300 flex items-center gap-1.5">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          โหมดทดสอบระบบ (Interactive Demo Mode)
+        </span>
+        <div class="flex gap-2">
+          <a href="staff.html" class="underline text-sky-300 hover:text-white">หน้าเจ้าหน้าที่</a>
+          <span>•</span>
+          <a href="dashboard.html" class="underline text-sky-300 hover:text-white">Dashboard</a>
+          <span>•</span>
+          <a href="admin.html" class="underline text-sky-300 hover:text-white">Admin</a>
+        </div>
+      </div>
+      <p class="text-[11px] text-sky-200/90 leading-relaxed">
+        ข้อมูลตัวอย่างสำหรับทดสอบ: เลขสมาชิก <code class="bg-white/15 px-1 rounded text-white">00001</code> โทร <code class="bg-white/15 px-1 rounded text-white">0812345678</code> (พนักงาน กปน.) หรือ <code class="bg-white/15 px-1 rounded text-white">00003</code> โทร <code class="bg-white/15 px-1 rounded text-white">0811112222</code> (สมาชิกเกษียณ)
+      </p>
+    </div>
+
+    <!-- ================================================================== -->
+    <!-- STATE 1: INITIALIZING & LOADING SKELETON                           -->
+    <!-- ================================================================== -->
+    <section id="state-loading" class="bg-white rounded-2xl shadow-xl p-6 space-y-4 animate-pulse">
+      <div class="flex items-center space-x-4">
+        <div class="w-14 h-14 rounded-full bg-slate-200"></div>
+        <div class="flex-1 space-y-2">
+          <div class="h-4 bg-slate-200 rounded w-3/4"></div>
+          <div class="h-3 bg-slate-200 rounded w-1/2"></div>
+        </div>
+      </div>
+      <div class="h-32 bg-slate-100 rounded-xl"></div>
+      <div class="h-11 bg-slate-200 rounded-xl"></div>
+      <p class="text-center text-xs text-slate-400 pt-2">กำลังเชื่อมต่อ LINE LIFF และตรวจสอบสถานะสมาชิก...</p>
+    </section>
+
+    <!-- ================================================================== -->
+    <!-- STATE 2: PDPA PRIVACY NOTICE & CONSENT MODAL                       -->
+    <!-- ================================================================== -->
+    <section id="state-pdpa" class="hidden bg-white rounded-2xl shadow-2xl overflow-hidden border border-slate-100">
+      <div class="bg-gradient-to-r from-mwa-800 to-mwa-600 px-5 py-4 text-white">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-semibold uppercase tracking-wider bg-white/20 px-2.5 py-0.5 rounded-full">PDPA Compliance B.E. 2562</span>
+          <span class="text-xs text-sky-100">ขั้นตอนที่ 1 / 2</span>
+        </div>
+        <h2 class="text-lg font-bold mt-2">ประกาศความเป็นส่วนตัว (Privacy Notice)</h2>
+        <p class="text-xs text-sky-100 mt-0.5">พระราชบัญญัติคุ้มครองข้อมูลส่วนบุคคล พ.ศ. 2562</p>
+      </div>
+
+      <div class="p-5 space-y-4 text-sm text-slate-700">
+        <div class="bg-slate-50 border border-slate-200 rounded-xl p-3.5 max-h-60 overflow-y-auto space-y-2.5 text-xs leading-relaxed font-body">
+          <p class="font-bold text-slate-900">1. ฐานทางกฎหมายในการประมวลผลข้อมูล (Lawful Basis)</p>
+          <p>
+            สหกรณ์ออมทรัพย์พนักงานการประปานครหลวง จำกัด (“สหกรณ์ฯ”) มีความจำเป็นต้องเก็บรวบรวมและใช้ข้อมูลส่วนบุคคลของท่าน ได้แก่ เลขทะเบียนสมาชิก ชื่อ-นามสกุล สถานะสมาชิก รหัสประจำตัวบัญชี LINE (LINE User ID) และเวลาเช็คอิน-เช็คเอาท์ เพื่อใช้ในการยืนยันตัวตนเข้าร่วมงานอบรมสัมมนา การออกบัตร E-Ticket และการออกใบประกาศนียบัตร ภายใต้ <strong>ฐานการปฏิบัติตามสัญญา (Contractual Basis)</strong> และ <strong>ฐานประโยชน์โดยชอบด้วยกฎหมาย (Legitimate Interest)</strong>
+          </p>
+          <p class="font-bold text-slate-900">2. มาตรการลดปริมาณข้อมูลและเข้ารหัส (Data Minimization)</p>
+          <p>
+            ระบบนี้<strong>ไม่จัดเก็บหมายเลขโทรศัพท์ของท่านในรูปแบบข้อความปกติ (Plain Text)</strong> โดยจะแปลงเป็นรหัสทางคณิตศาสตร์แบบทางเดียว (SHA-256 Cryptographic Hash) เพื่อใช้ตรวจสอบความถูกต้องเท่านั้น และจะทำการลบข้อมูลส่วนบุคคลออกจากฐานข้อมูลงานสัมมนาทันทีเมื่อเสร็จสิ้นภารกิจของงาน (PDPA Data Purge)
+          </p>
+          <p class="font-bold text-slate-900">3. สิทธิของเจ้าของข้อมูลส่วนบุคคล</p>
+          <p>
+            ท่านมีสิทธิในการขอเข้าถึง แก้ไข หรือขอให้ลบข้อมูลส่วนบุคคลของท่านได้ ณ จุดบริการ Helpdesk หน้างานสัมมนา หรือติดต่อสหกรณ์ฯ ในเวลาทำการ
+          </p>
+        </div>
+
+        <!-- Required Acknowledgment -->
+        <label class="flex items-start space-x-3 p-3 rounded-xl bg-sky-50/70 border border-sky-200 cursor-pointer">
+          <input id="chk-pdpa-ack" type="checkbox" class="mt-1 w-4 h-4 text-mwa-600 rounded border-slate-300 focus:ring-mwa-500" />
+          <span class="text-xs text-slate-800 leading-relaxed font-medium">
+            ข้าพเจ้ารับทราบประกาศความเป็นส่วนตัว (Privacy Notice) และตกลงผูกบัญชี LINE เพื่อรับบัตรเข้างานอิเล็กทรอนิกส์ (E-Ticket) <span class="text-rose-600 font-bold">*</span>
+          </span>
+        </label>
+
+        <!-- Optional Event Photography Consent -->
+        <div id="photo-consent-wrapper" class="p-3 rounded-xl bg-slate-50 border border-slate-200">
+          <label class="flex items-start space-x-3 cursor-pointer">
+            <input id="chk-photo-consent" type="checkbox" checked class="mt-1 w-4 h-4 text-mwa-600 rounded border-slate-300 focus:ring-mwa-500" />
+            <span class="text-xs text-slate-700 leading-relaxed">
+              <strong class="text-slate-900">[ทางเลือก] ความยินยอมเกี่ยวกับภาพถ่ายและวิดีโอภายในงาน:</strong> ข้าพเจ้ายินยอมให้สหกรณ์ฯ บันทึกภาพนิ่งและวิดีโอบรรยากาศการอบรมสัมมนา เพื่อใช้ประชาสัมพันธ์ในสื่อสิ่งพิมพ์และสื่ออิเล็กทรอนิกส์ของสหกรณ์ฯ
+            </span>
+          </label>
+        </div>
+
+        <button id="btn-accept-pdpa" type="button" disabled
+          class="w-full py-3 px-4 rounded-xl font-semibold text-white bg-mwa-600 hover:bg-mwa-700 disabled:bg-slate-300 disabled:text-slate-500 transition shadow-md">
+          รับทราบและดำเนินการต่อ
+        </button>
+      </div>
+    </section>
+
+    <!-- ================================================================== -->
+    <!-- STATE 3: MEMBER REGISTRATION FORM (If LINE UID is unbound)         -->
+    <!-- ================================================================== -->
+    <section id="state-register" class="hidden bg-white rounded-2xl shadow-2xl overflow-hidden border border-slate-100">
+      <div class="bg-gradient-to-r from-mwa-800 to-mwa-600 px-5 py-4 text-white">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-semibold bg-white/20 px-2.5 py-0.5 rounded-full">ยืนยันตัวตนสมาชิก</span>
+          <span class="text-xs text-sky-100">ขั้นตอนที่ 2 / 2</span>
+        </div>
+        <h2 class="text-lg font-bold mt-2">ลงทะเบียนรับบัตร E-Ticket</h2>
+        <p class="text-xs text-sky-100 mt-0.5">กรอกเลขทะเบียนสมาชิกสหกรณ์ฯ และเบอร์โทรศัพท์ที่ให้ไว้กับสหกรณ์ฯ</p>
+      </div>
+
+      <form id="form-register" class="p-5 space-y-4">
+        <div id="register-error" class="hidden p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-medium"></div>
+
+        <div>
+          <label for="input-member-no" class="block text-xs font-semibold text-slate-700 mb-1">
+            เลขทะเบียนสมาชิกสหกรณ์ฯ <span class="text-rose-500">*</span>
+          </label>
+          <input id="input-member-no" type="text" inputmode="numeric" maxlength="20" required
+            placeholder="เช่น 00001 หรือ 12345"
+            class="w-full px-4 py-3 rounded-xl border border-slate-300 focus:border-mwa-500 focus:ring-2 focus:ring-mwa-200 outline-none text-base font-semibold tracking-wider text-slate-900" />
+          <p class="text-[11px] text-slate-400 mt-1">ระบบจะเติมเลข 0 ด้านหน้าให้อัตโนมัติให้ครบ 5 หลัก (เช่น กรอก 1 จะเป็น 00001)</p>
+        </div>
+
+        <div>
+          <label for="input-phone" class="block text-xs font-semibold text-slate-700 mb-1">
+            หมายเลขโทรศัพท์มือถือ (10 หลัก) <span class="text-rose-500">*</span>
+          </label>
+          <input id="input-phone" type="tel" inputmode="tel" maxlength="12" required
+            placeholder="เช่น 0812345678"
+            class="w-full px-4 py-3 rounded-xl border border-slate-300 focus:border-mwa-500 focus:ring-2 focus:ring-mwa-200 outline-none text-base font-semibold tracking-wider text-slate-900" />
+          <p class="text-[11px] text-emerald-700 mt-1 flex items-center gap-1">
+            🔒 เข้ารหัส SHA-256 ทันทีบนอุปกรณ์ของท่านตามมาตรฐาน PDPA
+          </p>
+        </div>
+
+        <button id="btn-submit-register" type="submit"
+          class="w-full py-3.5 px-4 rounded-xl font-bold text-white bg-gradient-to-r from-mwa-700 to-mwa-500 hover:from-mwa-800 hover:to-mwa-600 shadow-lg transition flex items-center justify-center gap-2">
+          <span>ยืนยันตัวตนและออกบัตร E-Ticket</span>
+        </button>
+
+        <div class="pt-2 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+          <button id="btn-back-pdpa" type="button" class="hover:text-mwa-600 underline">ทบทวนข้อตกลง PDPA</button>
+          <span>พบปัญหา? ติดต่อจุด Helpdesk หน้างาน</span>
+        </div>
+      </form>
+    </section>
+
+    <!-- ================================================================== -->
+    <!-- STATE 4, 5, 6: E-TICKET, KIOSK SELF-SCAN, AND CERTIFICATE DOWNLOAD -->
+    <!-- ================================================================== -->
+    <section id="state-eticket" class="hidden space-y-4">
+
+      <!-- E-Ticket Card -->
+      <div class="bg-white rounded-3xl shadow-2xl overflow-hidden border border-white/20">
+        <!-- Top Ticket Banner -->
+        <div id="ticket-header-banner" class="bg-gradient-to-r from-sky-700 to-sky-500 px-5 py-4 text-white flex items-center justify-between">
+          <div>
+            <span class="text-[11px] uppercase tracking-widest opacity-85 font-semibold">CO-OPERATIVE SEMINAR E-TICKET</span>
+            <h2 id="ticket-member-name" class="text-lg font-bold leading-snug mt-0.5">-</h2>
+          </div>
+          <div class="text-right">
+            <span class="text-[10px] block opacity-80">เลขทะเบียน</span>
+            <span id="ticket-member-no" class="text-xl font-extrabold tracking-wider bg-black/20 px-2.5 py-0.5 rounded-lg">-</span>
+          </div>
+        </div>
+
+        <!-- Role Badge & Attendance Status Strip -->
+        <div class="px-5 py-3 bg-slate-50 border-b border-dashed border-slate-200 flex items-center justify-between">
+          <div class="flex items-center space-x-2">
+            <span class="text-xs text-slate-500">ประเภทสมาชิก:</span>
+            <span id="ticket-role-badge" class="px-2.5 py-0.5 rounded-full text-xs font-bold">-</span>
+          </div>
+          <div id="ticket-checkin-pill" class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800">
+            รอเช็คอินหน้างาน
+          </div>
+        </div>
+
+        <!-- High-Contrast QR Code Section -->
+        <div class="p-6 text-center space-y-3">
+          <p class="text-xs text-slate-500 font-medium">แสดง QR Code นี้ต่อเจ้าหน้าที่ หรือกดสแกนป้าย Kiosk ด้านล่าง</p>
+          <div class="inline-block p-4 bg-white rounded-2xl border-2 border-slate-900 shadow-inner">
+            <div id="eticket-qrcode" class="w-[210px] h-[210px] flex items-center justify-center"></div>
+          </div>
+          <p id="ticket-qr-token-text" class="text-[11px] font-mono text-slate-400 select-all"></p>
+
+          <!-- Timestamp Details Box -->
+          <div class="grid grid-cols-2 gap-2 pt-2 text-left">
+            <div class="bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+              <span class="text-[10px] text-slate-400 block">เวลาเช็คอินเข้างาน</span>
+              <span id="ticket-checkin-time" class="text-xs font-bold text-slate-800">ยังไม่ได้เช็คอิน</span>
+            </div>
+            <div class="bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+              <span class="text-[10px] text-slate-400 block">เวลาเช็คเอาท์</span>
+              <span id="ticket-checkout-time" class="text-xs font-bold text-slate-800">-</span>
+            </div>
+          </div>
+
+          <!-- Souvenir & Meal Claim Status Indicators -->
+          <div class="grid grid-cols-2 gap-2 pt-1 text-left">
+            <div id="ticket-souvenir-box" class="bg-amber-50/70 p-2.5 rounded-xl border border-amber-200">
+              <div class="flex items-center justify-between">
+                <span class="text-[11px] text-amber-900 font-semibold block">🎁 ของที่ระลึก</span>
+                <span id="ticket-souvenir-badge" class="text-[10px] px-1.5 py-0.5 rounded-full font-bold bg-amber-200 text-amber-900">ยังไม่ได้รับ</span>
+              </div>
+              <span id="ticket-souvenir-time" class="text-[10px] text-slate-500 block mt-1 truncate">-</span>
+            </div>
+            <div id="ticket-meal-box" class="bg-emerald-50/70 p-2.5 rounded-xl border border-emerald-200">
+              <div class="flex items-center justify-between">
+                <span class="text-[11px] text-emerald-900 font-semibold block">🍱 อาหารว่าง (รับหลังเช็คเอาท์)</span>
+                <span id="ticket-meal-badge" class="text-[10px] px-1.5 py-0.5 rounded-full font-bold bg-slate-200 text-slate-700">รอเช็คเอาท์</span>
+              </div>
+              <span id="ticket-meal-time" class="text-[10px] text-slate-500 block mt-1 truncate">รับได้เมื่อเช็คเอาท์</span>
+            </div>
+          </div>
+
+          <!-- Free LINE Share / Save Button (Zero Quota - 0 THB) -->
+          <button id="btn-share-line-ticket" type="button"
+            class="w-full mt-2 py-3 px-4 rounded-xl font-bold text-white bg-[#06c755] hover:bg-[#05b34c] shadow-md transition flex items-center justify-center gap-2 text-xs">
+            <span>💬 ส่งบัตร E-Ticket เข้าแชท LINE (Save to LINE)</span>
+          </button>
+        </div>
+
+        <!-- Ticket Footer Actions -->
+        <div class="px-5 py-3 bg-slate-100 border-t border-slate-200 flex items-center justify-between text-xs text-slate-600">
+          <span id="ticket-photo-consent-tag">📸 ยินยอมถ่ายภาพประชาสัมพันธ์</span>
+          <button id="btn-refresh-ticket" type="button" class="text-mwa-600 font-semibold hover:underline flex items-center gap-1">
+            🔄 อัปเดตสถานะ
+          </button>
+        </div>
+      </div>
+
+      <!-- STATE 5: Kiosk Self-Scan Action Card -->
+      <div id="kiosk-action-card" class="bg-white rounded-2xl shadow-xl p-4 border border-sky-100 space-y-3">
+        <div class="flex items-center justify-between">
+          <div>
+            <h3 class="text-sm font-bold text-slate-900 flex items-center gap-1.5">
+              📷 เช็คอินด้วยตนเอง (Self-Scan Kiosk)
+            </h3>
+            <p class="text-xs text-slate-500">เปิดกล้องมือถือของท่านเพื่อสแกน QR Code บนจอแท็บเล็ตจุดลงทะเบียน</p>
+          </div>
+        </div>
+
+        <button id="btn-open-kiosk-scanner" type="button"
+          class="w-full py-3.5 px-4 rounded-xl font-bold text-white bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 shadow-md transition flex items-center justify-center gap-2 text-sm">
+          <span>สแกนป้ายจุดลงทะเบียน (Kiosk QR)</span>
+        </button>
+
+        <!-- Embedded Camera Container when scanning Kiosk QR -->
+        <div id="kiosk-scanner-wrapper" class="hidden space-y-3 pt-2">
+          <div id="kiosk-qr-reader" class="rounded-xl overflow-hidden border-2 border-emerald-500 bg-black"></div>
+          <div class="flex gap-2">
+            <button id="btn-simulate-kiosk-scan" type="button"
+              class="flex-1 py-2 px-3 rounded-lg bg-sky-100 text-sky-800 font-semibold text-xs hover:bg-sky-200">
+              ⚡ จำลองการสแกนป้าย Kiosk (สำหรับทดสอบ)
+            </button>
+            <button id="btn-close-kiosk-scanner" type="button"
+              class="py-2 px-4 rounded-lg bg-slate-200 text-slate-700 font-semibold text-xs hover:bg-slate-300">
+              ปิดกล้อง
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- STATE 6: Certificate Download Card -->
+      <div id="certificate-action-card" class="hidden bg-gradient-to-br from-amber-50 to-yellow-100/90 rounded-2xl shadow-xl p-4 border border-amber-300 space-y-3">
+        <div class="flex items-start justify-between">
+          <div>
+            <span class="text-[10px] font-bold uppercase tracking-wider bg-amber-500 text-white px-2 py-0.5 rounded-full">E-Certificate</span>
+            <h3 class="text-sm font-bold text-slate-900 mt-1">ใบประกาศนียบัตรผู้เข้าร่วมสัมมนา</h3>
+            <p class="text-xs text-slate-600">สร้างไฟล์ PDF ความละเอียดสูงพร้อมลายน้ำสหกรณ์ฯ บนอุปกรณ์ของท่าน</p>
+          </div>
+          <span class="text-2xl">🎓</span>
+        </div>
+
+        <button id="btn-download-cert" type="button"
+          class="w-full py-3.5 px-4 rounded-xl font-bold text-slate-900 bg-gradient-to-r from-amber-400 to-yellow-400 hover:from-amber-500 hover:to-yellow-500 shadow-md transition flex items-center justify-center gap-2 text-sm">
+          <span>ดาวน์โหลดใบประกาศนียบัตร (PDF)</span>
+        </button>
+      </div>
+
+    </section>
+
+    <!-- Toast Notification Modal -->
+    <div id="toast-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4">
+      <div class="bg-white rounded-2xl max-w-sm w-full p-6 text-center shadow-2xl space-y-4">
+        <div id="toast-icon" class="w-16 h-16 rounded-full mx-auto flex items-center justify-center text-3xl bg-emerald-100 text-emerald-600">
+          ✓
+        </div>
+        <h3 id="toast-title" class="text-lg font-bold text-slate-900">สำเร็จ</h3>
+        <p id="toast-message" class="text-xs text-slate-600 leading-relaxed"></p>
+        <button id="btn-close-toast" type="button"
+          class="w-full py-2.5 rounded-xl font-bold text-white bg-mwa-600 hover:bg-mwa-700 text-sm">
+          ตกลง
+        </button>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Hidden High-Resolution Canvas for Thai PDF Certificate Rendering -->
+  <canvas id="cert-render-canvas" width="1754" height="1240" class="hidden"></canvas>
+
+  <!-- Application Scripts -->
+  <script src="js/config.js"></script>
+  <script src="js/liff-helper.js"></script>
+  <script>
+    (function () {
+      let currentMember = null;
+      let currentSettings = null;
+      let html5QrScanner = null;
+
+      // DOM Elements
+      const elStateLoading = document.getElementById("state-loading");
+      const elStatePdpa = document.getElementById("state-pdpa");
+      const elStateRegister = document.getElementById("state-register");
+      const elStateEticket = document.getElementById("state-eticket");
+
+      const elChkPdpa = document.getElementById("chk-pdpa-ack");
+      const elChkPhoto = document.getElementById("chk-photo-consent");
+      const elBtnAcceptPdpa = document.getElementById("btn-accept-pdpa");
+      const elFormRegister = document.getElementById("form-register");
+      const elRegisterError = document.getElementById("register-error");
+
+      function showToast(title, message, isError = false) {
+        const modal = document.getElementById("toast-modal");
+        const icon = document.getElementById("toast-icon");
+        document.getElementById("toast-title").textContent = title;
+        document.getElementById("toast-message").textContent = message;
+        if (isError) {
+          icon.className = "w-16 h-16 rounded-full mx-auto flex items-center justify-center text-3xl bg-rose-100 text-rose-600";
+          icon.textContent = "✕";
+        } else {
+          icon.className = "w-16 h-16 rounded-full mx-auto flex items-center justify-center text-3xl bg-emerald-100 text-emerald-600";
+          icon.textContent = "✓";
+        }
+        modal.classList.remove("hidden");
+        modal.classList.add("flex");
+      }
+
+      document.getElementById("btn-close-toast").addEventListener("click", () => {
+        const modal = document.getElementById("toast-modal");
+        modal.classList.add("hidden");
+        modal.classList.remove("flex");
+      });
+
+      function switchScreen(targetEl) {
+        [elStateLoading, elStatePdpa, elStateRegister, elStateEticket].forEach((el) => {
+          el.classList.add("hidden");
+        });
+        targetEl.classList.remove("hidden");
+      }
+
+      function applySettingsUI(settings) {
+        if (!settings) return;
+        currentSettings = settings;
+
+        if (settings.event_name) {
+          document.getElementById("header-event-name").textContent = settings.event_name;
+        }
+
+        const banner = document.getElementById("announcement-banner");
+        if (settings.announcement_text && settings.announcement_text.trim()) {
+          document.getElementById("announcement-text").textContent = settings.announcement_text;
+          banner.classList.remove("hidden");
+        } else {
+          banner.classList.add("hidden");
+        }
+
+        const photoWrapper = document.getElementById("photo-consent-wrapper");
+        if (settings.enable_photo_consent === false) {
+          photoWrapper.classList.add("hidden");
+          elChkPhoto.checked = false;
+        } else {
+          photoWrapper.classList.remove("hidden");
+        }
+
+        const kioskCard = document.getElementById("kiosk-action-card");
+        if (settings.enable_checkin && settings.enable_kiosk_mode) {
+          kioskCard.classList.remove("hidden");
+        } else {
+          kioskCard.classList.add("hidden");
+        }
+
+        const certCard = document.getElementById("certificate-action-card");
+        if (settings.enable_certificate) {
+          certCard.classList.remove("hidden");
+        } else {
+          certCard.classList.add("hidden");
+        }
+      }
+
+      function renderETicket(member) {
+        currentMember = member;
+        const fullName = `${member.prefix || ""}${member.first_name} ${member.last_name}`.trim();
+        document.getElementById("ticket-member-name").textContent = fullName;
+        document.getElementById("ticket-member-no").textContent = member.member_no;
+
+        const roleBadge = document.getElementById("ticket-role-badge");
+        const headerBanner = document.getElementById("ticket-header-banner");
+        if (member.person_status === "RETIRED") {
+          roleBadge.textContent = "สมาชิกเกษียณอายุ (RETIRED)";
+          roleBadge.className = "px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-300";
+          headerBanner.className = "bg-gradient-to-r from-amber-700 to-amber-500 px-5 py-4 text-white flex items-center justify-between";
+        } else {
+          roleBadge.textContent = "พนักงาน กปน. (ACTIVE_MWA)";
+          roleBadge.className = "px-2.5 py-0.5 rounded-full text-xs font-bold bg-sky-100 text-sky-800 border border-sky-300";
+          headerBanner.className = "bg-gradient-to-r from-sky-800 to-sky-600 px-5 py-4 text-white flex items-center justify-between";
+        }
+
+        const checkinPill = document.getElementById("ticket-checkin-pill");
+        if (member.checked_out_at) {
+          checkinPill.textContent = "✓ เช็คเอาท์แล้ว";
+          checkinPill.className = "px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-100 text-indigo-800";
+        } else if (member.checked_in_at) {
+          checkinPill.textContent = "✓ เช็คอินเข้างานแล้ว";
+          checkinPill.className = "px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800";
+        } else {
+          checkinPill.textContent = "รอเช็คอินหน้างาน";
+          checkinPill.className = "px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800";
+        }
+
+        document.getElementById("ticket-checkin-time").textContent =
+          member.checked_in_at ? window.formatThaiDateTime(member.checked_in_at) : "ยังไม่ได้เช็คอิน";
+        document.getElementById("ticket-checkout-time").textContent =
+          member.checked_out_at ? window.formatThaiDateTime(member.checked_out_at) : "-";
+
+        // Souvenir claim badge
+        const souvenirBadge = document.getElementById("ticket-souvenir-badge");
+        const souvenirTime = document.getElementById("ticket-souvenir-time");
+        if (member.souvenir_received_at) {
+          souvenirBadge.textContent = "✓ รับแล้ว";
+          souvenirBadge.className = "text-[10px] px-1.5 py-0.5 rounded-full font-bold bg-emerald-200 text-emerald-900";
+          souvenirTime.textContent = window.formatThaiDateTime(member.souvenir_received_at);
+        } else {
+          souvenirBadge.textContent = "ยังไม่ได้รับ";
+          souvenirBadge.className = "text-[10px] px-1.5 py-0.5 rounded-full font-bold bg-amber-200 text-amber-900";
+          souvenirTime.textContent = "รับ ณ จุดลงทะเบียน";
+        }
+
+        // Meal/Snack voucher claim badge (Claimed AFTER checkout)
+        const mealBadge = document.getElementById("ticket-meal-badge");
+        const mealTime = document.getElementById("ticket-meal-time");
+        if (member.meal_voucher_received_at) {
+          mealBadge.textContent = "✓ รับแล้ว";
+          mealBadge.className = "text-[10px] px-1.5 py-0.5 rounded-full font-bold bg-emerald-200 text-emerald-900";
+          mealTime.textContent = window.formatThaiDateTime(member.meal_voucher_received_at);
+        } else if (member.checked_out_at) {
+          mealBadge.textContent = "พร้อมรับอาหารว่าง";
+          mealBadge.className = "text-[10px] px-1.5 py-0.5 rounded-full font-bold bg-emerald-500 text-white animate-pulse";
+          mealTime.textContent = "แสดง QR ณ จุดทางออก";
+        } else {
+          mealBadge.textContent = "รอเช็คเอาท์";
+          mealBadge.className = "text-[10px] px-1.5 py-0.5 rounded-full font-bold bg-amber-100 text-amber-800 border border-amber-300";
+          mealTime.textContent = "รับได้หลังเช็คเอาท์ออกจากที่ประชุม";
+        }
+
+        document.getElementById("ticket-photo-consent-tag").textContent =
+          member.photo_consent ? "📸 ยินยอมถ่ายภาพประชาสัมพันธ์" : "🚫 ไม่ประสงค์ถ่ายภาพประชาสัมพันธ์";
+
+        // Render High-Contrast QR Code
+        const qrContainer = document.getElementById("eticket-qrcode");
+        qrContainer.innerHTML = "";
+        new QRCode(qrContainer, {
+          text: member.qr_token,
+          width: 200,
+          height: 200,
+          colorDark: "#000000",
+          colorLight: "#ffffff",
+          correctLevel: QRCode.CorrectLevel.M,
+        });
+        document.getElementById("ticket-qr-token-text").textContent = member.qr_token;
+
+        switchScreen(elStateEticket);
+      }
+
+      // PDPA Checkbox listener
+      elChkPdpa.addEventListener("change", () => {
+        elBtnAcceptPdpa.disabled = !elChkPdpa.checked;
+      });
+
+      elBtnAcceptPdpa.addEventListener("click", () => {
+        switchScreen(elStateRegister);
+      });
+
+      document.getElementById("btn-back-pdpa").addEventListener("click", () => {
+        switchScreen(elStatePdpa);
+      });
+
+      // Registration Form Submission
+      elFormRegister.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        elRegisterError.classList.add("hidden");
+
+        const rawMemberNo = document.getElementById("input-member-no").value;
+        const rawPhone = document.getElementById("input-phone").value;
+        const normMemberNo = window.normalizeMemberNo(rawMemberNo);
+        const normPhone = window.normalizePhone(rawPhone);
+
+        if (!normMemberNo || normPhone.length < 9 || normPhone.length > 10) {
+          elRegisterError.textContent = "กรุณากรอกเลขทะเบียนสมาชิก และหมายเลขโทรศัพท์ 9-10 หลักให้ถูกต้อง";
+          elRegisterError.classList.remove("hidden");
+          return;
+        }
+
+        const btnSubmit = document.getElementById("btn-submit-register");
+        const origText = btnSubmit.innerHTML;
+        btnSubmit.disabled = true;
+        btnSubmit.innerHTML = "<span>กำลังตรวจสอบและเข้ารหัสข้อมูล...</span>";
+
+        try {
+          // Pre-hash on client side for PDPA protection
+          const phoneHash = await window.hashMemberPhoneClient(normMemberNo, normPhone);
+
+          const res = await window.invokeEdgeFunction("register", {
+            action: "REGISTER",
+            idToken: window.LiffHelper.getIdToken(),
+            member_no: normMemberNo,
+            phone_number: normPhone,
+            phone_hash: phoneHash,
+            photo_consent: elChkPhoto.checked,
+          });
+
+          if (res.settings) applySettingsUI(res.settings);
+          renderETicket(res.member);
+          showToast(
+            "ลงทะเบียนสำเร็จ!",
+            `ยินดีต้อนรับ ${res.member.prefix}${res.member.first_name} ${res.member.last_name} บัตร E-Ticket ของท่านพร้อมใช้งานแล้ว`,
+          );
+        } catch (err) {
+          elRegisterError.textContent = err.message || "ไม่สามารถลงทะเบียนได้ กรุณาตรวจสอบข้อมูลอีกครั้ง";
+          elRegisterError.classList.remove("hidden");
+        } finally {
+          btnSubmit.disabled = false;
+          btnSubmit.innerHTML = origText;
+        }
+      });
+
+      // Refresh Status Button
+      document.getElementById("btn-refresh-ticket").addEventListener("click", async () => {
+        try {
+          const res = await window.invokeEdgeFunction("register", {
+            action: "STATUS",
+            idToken: window.LiffHelper.getIdToken(),
+          });
+          if (res.settings) applySettingsUI(res.settings);
+          if (res.bound && res.member) {
+            renderETicket(res.member);
+          }
+        } catch (err) {
+          showToast("ไม่สามารถอัปเดตสถานะได้", err.message, true);
+        }
+      });
+
+      // Free LINE Share Button (Using liff.shareTargetPicker or liff.sendMessages - 0 THB)
+      document.getElementById("btn-share-line-ticket").addEventListener("click", async () => {
+        if (!currentMember) return;
+        const fullName = `${currentMember.prefix || ""}${currentMember.first_name} ${currentMember.last_name}`.trim();
+        const roleLabel = currentMember.person_status === "RETIRED" ? "สมาชิกเกษียณอายุ" : "พนักงาน กปน.";
+        const checkinStatus = currentMember.checked_in_at ? "✓ เช็คอินแล้ว" : "รอเช็คอินหน้างาน";
+        const pageUrl = window.location.href.split("?")[0].split("#")[0];
+
+        const flexMessage = {
+          type: "flex",
+          altText: `บัตรเข้างานสัมมนาสหกรณ์ฯ (${currentMember.member_no})`,
+          contents: {
+            type: "bubble",
+            size: "mega",
+            header: {
+              type: "box",
+              layout: "vertical",
+              backgroundColor: currentMember.person_status === "RETIRED" ? "#b45309" : "#0369a1",
+              paddingAll: "lg",
+              contents: [
+                {
+                  type: "text",
+                  text: "CO-OPERATIVE SEMINAR E-TICKET",
+                  color: "#ffffffcc",
+                  size: "xxs",
+                  weight: "bold",
+                },
+                {
+                  type: "text",
+                  text: fullName,
+                  color: "#ffffff",
+                  size: "lg",
+                  weight: "bold",
+                  margin: "xs",
+                },
+                {
+                  type: "text",
+                  text: `เลขทะเบียน: ${currentMember.member_no} (${roleLabel})`,
+                  color: "#fef08a",
+                  size: "xs",
+                  margin: "xs",
+                },
+              ],
+            },
+            body: {
+              type: "box",
+              layout: "vertical",
+              paddingAll: "lg",
+              contents: [
+                {
+                  type: "box",
+                  layout: "vertical",
+                  margin: "none",
+                  spacing: "sm",
+                  contents: [
+                    {
+                      type: "box",
+                      layout: "horizontal",
+                      contents: [
+                        { type: "text", text: "สถานะเข้าร่วม", size: "xs", color: "#64748b", flex: 3 },
+                        { type: "text", text: checkinStatus, size: "xs", color: currentMember.checked_in_at ? "#15803d" : "#b45309", weight: "bold", flex: 4, align: "end" },
+                      ],
+                    },
+                    {
+                      type: "box",
+                      layout: "horizontal",
+                      contents: [
+                        { type: "text", text: "ของที่ระลึก", size: "xs", color: "#64748b", flex: 3 },
+                        { type: "text", text: currentMember.souvenir_received_at ? "✓ รับแล้ว" : "ยังไม่ได้รับ", size: "xs", color: currentMember.souvenir_received_at ? "#15803d" : "#64748b", weight: "bold", flex: 4, align: "end" },
+                      ],
+                    },
+                    {
+                      type: "box",
+                      layout: "horizontal",
+                      contents: [
+                        { type: "text", text: "คูปองอาหาร", size: "xs", color: "#64748b", flex: 3 },
+                        { type: "text", text: currentMember.meal_voucher_received_at ? "✓ รับแล้ว" : "ยังไม่ได้รับ", size: "xs", color: currentMember.meal_voucher_received_at ? "#15803d" : "#64748b", weight: "bold", flex: 4, align: "end" },
+                      ],
+                    },
+                  ],
+                },
+                {
+                  type: "separator",
+                  margin: "md",
+                },
+                {
+                  type: "text",
+                  text: "บันทึกบัตรนี้ไว้แสดงต่อเจ้าหน้าที่หน้างาน หรือเปิด E-Ticket ผ่านระบบสหกรณ์ฯ",
+                  size: "xxs",
+                  color: "#94a3b8",
+                  margin: "md",
+                  wrap: true,
+                },
+              ],
+            },
+            footer: {
+              type: "box",
+              layout: "vertical",
+              spacing: "sm",
+              contents: [
+                {
+                  type: "button",
+                  style: "primary",
+                  height: "sm",
+                  color: "#0369a1",
+                  action: {
+                    type: "uri",
+                    label: "เปิดบัตร E-Ticket ของฉัน",
+                    uri: pageUrl,
+                  },
+                },
+              ],
+            },
+          },
+        };
+
+        try {
+          if (window.liff && window.liff.isApiAvailable("shareTargetPicker")) {
+            await window.liff.shareTargetPicker([flexMessage]);
+            showToast("แชร์สำเร็จ", "ส่งบัตร E-Ticket ไปยังห้องแชท LINE เรียบร้อยแล้ว (ไม่เสียค่าโควต้าส่งข้อความ)");
+            return;
+          }
+
+          if (window.liff && window.liff.isInClient()) {
+            await window.liff.sendMessages([flexMessage]);
+            showToast("บันทึกสำเร็จ", "ส่งบัตร E-Ticket เข้าแชทนี้เรียบร้อยแล้ว");
+            return;
+          }
+
+          // Fallback if running outside LINE App
+          navigator.clipboard?.writeText(pageUrl);
+          showToast(
+            "คัดลอกลิงก์ E-Ticket แล้ว",
+            `เลขทะเบียน: ${currentMember.member_no}\nลิงก์บัตร: ${pageUrl}\nท่านสามารถวางส่งในแชท LINE เพื่อเปิดดูได้ตลอดเวลา`,
+          );
+        } catch (err) {
+          console.warn("LIFF share failed:", err);
+          showToast(
+            "ข้อมูลบัตร E-Ticket",
+            `เลขทะเบียน ${currentMember.member_no}: ${fullName}\nท่านสามารถแคปภาพหน้าจอบัตร QR Code นี้ไว้แสดงต่อเจ้าหน้าที่ได้เช่นกัน`,
+          );
+        }
+      });
+
+      // Kiosk Self-Scan Camera Handler
+      async function submitKioskCheckin(kioskToken) {
+        try {
+          const actionType =
+            currentSettings?.enable_checkout && currentMember?.checked_in_at
+              ? "CHECKOUT"
+              : "CHECKIN";
+
+          const res = await window.invokeEdgeFunction("checkin", {
+            idToken: window.LiffHelper.getIdToken(),
+            mode: "KIOSK",
+            action_type: actionType,
+            kiosk_session_token: kioskToken,
+          });
+
+          if (res.attendee && currentMember) {
+            currentMember.checked_in_at = res.attendee.checked_in_at;
+            currentMember.checked_out_at = res.attendee.checked_out_at;
+            currentMember.checkin_mode = res.attendee.checkin_mode;
+            renderETicket(currentMember);
+          }
+
+          showToast(
+            res.message || "เช็คอินสำเร็จ!",
+            `${res.attendee?.full_name || ""} (${res.attendee?.member_no || ""})\nเวลา: ${window.formatThaiDateTime(res.attendee?.checked_in_at)}`,
+          );
+        } catch (err) {
+          showToast("เช็คอินไม่สำเร็จ", err.message, true);
+        }
+      }
+
+      async function stopKioskCamera() {
+        if (html5QrScanner) {
+          try {
+            await html5QrScanner.stop();
+            html5QrScanner.clear();
+          } catch (_) {}
+          html5QrScanner = null;
+        }
+        document.getElementById("kiosk-scanner-wrapper").classList.add("hidden");
+      }
+
+      document.getElementById("btn-open-kiosk-scanner").addEventListener("click", async () => {
+        const wrapper = document.getElementById("kiosk-scanner-wrapper");
+        wrapper.classList.remove("hidden");
+
+        if (html5QrScanner) return;
+        try {
+          html5QrScanner = new Html5Qrcode("kiosk-qr-reader");
+          await html5QrScanner.start(
+            { facingMode: "environment" },
+            { fps: 10, qrbox: { width: 220, height: 220 } },
+            async (decodedText) => {
+              await stopKioskCamera();
+              await submitKioskCheckin(decodedText);
+            },
+            () => {}
+          );
+        } catch (camErr) {
+          showToast(
+            "ไม่สามารถเปิดกล้องได้",
+            "เบราว์เซอร์ไม่ได้รับสิทธิ์ใช้กล้อง หรือท่านสามารถกดปุ่ม 'จำลองการสแกนป้าย Kiosk' เพื่อทดสอบได้",
+            true,
+          );
+        }
+      });
+
+      document.getElementById("btn-close-kiosk-scanner").addEventListener("click", stopKioskCamera);
+
+      document.getElementById("btn-simulate-kiosk-scan").addEventListener("click", async () => {
+        await stopKioskCamera();
+        const validDynamicToken = await window.generateKioskDynamicToken(
+          currentSettings?.dynamic_qr_interval_sec || 20,
+        );
+        await submitKioskCheckin(validDynamicToken);
+      });
+
+      // STATE 6: Dynamic Thai Certificate PDF Generator (Canvas + jsPDF)
+      document.getElementById("btn-download-cert").addEventListener("click", async () => {
+        const btn = document.getElementById("btn-download-cert");
+        const origHtml = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = "<span>กำลังตรวจสอบสิทธิ์และสร้างไฟล์ PDF...</span>";
+
+        try {
+          const res = await window.invokeEdgeFunction("certificate", {
+            idToken: window.LiffHelper.getIdToken(),
+          });
+
+          const cert = res.certificate;
+          const canvas = document.getElementById("cert-render-canvas");
+          const ctx = canvas.getContext("2d");
+          const W = canvas.width;
+          const H = canvas.height;
+
+          // 1. Cream/Ivory Luxury Background
+          const grad = ctx.createLinearGradient(0, 0, W, H);
+          grad.addColorStop(0, "#fffdf9");
+          grad.addColorStop(0.5, "#f8fafc");
+          grad.addColorStop(1, "#f0f9ff");
+          ctx.fillStyle = grad;
+          ctx.fillRect(0, 0, W, H);
+
+          // 2. Ornamental Double Gold & Navy Borders
+          ctx.strokeStyle = "#0c4a6e";
+          ctx.lineWidth = 18;
+          ctx.strokeRect(45, 45, W - 90, H - 90);
+
+          ctx.strokeStyle = "#eab308";
+          ctx.lineWidth = 6;
+          ctx.strokeRect(70, 70, W - 140, H - 140);
+
+          // 3. Subtle Center Watermark
+          ctx.save();
+          ctx.globalAlpha = 0.05;
+          ctx.fillStyle = "#0c4a6e";
+          ctx.beginPath();
+          ctx.arc(W / 2, H / 2, 320, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.font = "bold 72px Prompt, Sarabun, sans-serif";
+          ctx.textAlign = "center";
+          ctx.fillText("MWA CO-OPERATIVE SEMINAR", W / 2, H / 2 + 20);
+          ctx.restore();
+
+          // 4. Draw Cooperative Text & Certificate Content
+          ctx.textAlign = "center";
+          ctx.fillStyle = "#0c4a6e";
+          ctx.font = "bold 46px Prompt, Sarabun, sans-serif";
+          ctx.fillText("สหกรณ์ออมทรัพย์พนักงานการประปานครหลวง จำกัด", W / 2, 220);
+
+          ctx.fillStyle = "#b45309";
+          ctx.font = "bold 34px Prompt, Sarabun, sans-serif";
+          ctx.fillText("ขอมอบเกียรติบัตรฉบับนี้ไว้เพื่อแสดงว่า", W / 2, 310);
+
+          // Attendee Full Name
+          ctx.fillStyle = "#0f172a";
+          ctx.font = "bold 68px Prompt, Sarabun, sans-serif";
+          ctx.fillText(cert.full_name, W / 2, 450);
+
+          // Member No & Status Badge
+          ctx.fillStyle = "#0369a1";
+          ctx.font = "600 32px Prompt, Sarabun, sans-serif";
+          ctx.fillText(
+            `เลขทะเบียนสมาชิก ${cert.member_no}  |  ${cert.person_status_label}`,
+            W / 2,
+            525,
+          );
+
+          // Event Description
+          ctx.fillStyle = "#334155";
+          ctx.font = "500 36px Prompt, Sarabun, sans-serif";
+          ctx.fillText("ได้เข้าร่วมโครงการอบรมสัมมนาสมาชิกสหกรณ์ฯ", W / 2, 640);
+
+          ctx.fillStyle = "#0c4a6e";
+          ctx.font = "bold 40px Prompt, Sarabun, sans-serif";
+          ctx.fillText(cert.event_name, W / 2, 715);
+
+          // Issue Date
+          ctx.fillStyle = "#475569";
+          ctx.font = "500 32px Prompt, Sarabun, sans-serif";
+          ctx.fillText(`ให้ไว้ ณ วันที่ ${cert.issue_date}`, W / 2, 820);
+
+          // Signature Line
+          ctx.strokeStyle = "#64748b";
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(W / 2 - 220, 980);
+          ctx.lineTo(W / 2 + 220, 980);
+          ctx.stroke();
+
+          ctx.fillStyle = "#1e293b";
+          ctx.font = "bold 30px Prompt, Sarabun, sans-serif";
+          ctx.fillText("คณะกรรมการดำเนินการ", W / 2, 1030);
+          ctx.font = "500 26px Prompt, Sarabun, sans-serif";
+          ctx.fillText("สหกรณ์ออมทรัพย์พนักงานการประปานครหลวง จำกัด", W / 2, 1070);
+
+          // Verification Footer
+          ctx.textAlign = "left";
+          ctx.fillStyle = "#64748b";
+          ctx.font = "22px monospace";
+          ctx.fillText(`Certificate ID: ${cert.cert_id}`, 110, H - 105);
+
+          // 5. Export to Landscape A4 PDF using jsPDF
+          const imgData = canvas.toDataURL("image/jpeg", 0.95);
+          const { jsPDF } = window.jspdf;
+          const pdf = new jsPDF({
+            orientation: "landscape",
+            unit: "mm",
+            format: "a4",
+          });
+          pdf.addImage(imgData, "JPEG", 0, 0, 297, 210);
+          pdf.save(`Certificate-MWA-${cert.member_no}.pdf`);
+
+          showToast(
+            "ดาวน์โหลดใบประกาศนียบัตรสำเร็จ",
+            `รหัสอ้างอิง: ${cert.cert_id}\nไฟล์ PDF ถูกบันทึกลงในอุปกรณ์ของท่านเรียบร้อยแล้ว`,
+          );
+        } catch (err) {
+          showToast("ไม่สามารถออกใบประกาศนียบัตรได้", err.message, true);
+        } finally {
+          btn.disabled = false;
+          btn.innerHTML = origHtml;
+        }
+      });
+
+      // Initialize Application on Load
+      async function bootstrap() {
+        try {
+          const auth = await window.LiffHelper.init(
+            window.APP_CONFIG.LIFF_ID_MEMBER,
+            "MEMBER",
+          );
+          if (!auth) return; // Redirecting to LINE Login
+
+          if (auth.isDemoMode || !window.isBackendConfigured()) {
+            document.getElementById("demo-mode-bar").classList.remove("hidden");
+          }
+
+          // Show user profile pill
+          const pill = document.getElementById("user-pill");
+          document.getElementById("user-avatar").src = auth.profile.pictureUrl;
+          document.getElementById("user-display-name").textContent = auth.profile.displayName;
+          pill.classList.remove("hidden");
+          pill.classList.add("flex");
+
+          // Query binding status via stateless HTTP Edge Function
+          const statusRes = await window.invokeEdgeFunction("register", {
+            action: "STATUS",
+            idToken: auth.idToken,
+          });
+
+          if (statusRes.settings) {
+            applySettingsUI(statusRes.settings);
+          }
+
+          if (statusRes.bound && statusRes.member) {
+            renderETicket(statusRes.member);
+          } else {
+            switchScreen(elStatePdpa);
+          }
+        } catch (err) {
+          showToast("เกิดข้อผิดพลาดในการเชื่อมต่อ", err.message, true);
+          switchScreen(elStatePdpa);
+        }
+      }
+
+      bootstrap();
+    })();
+  </script>
+</body>
+</html>

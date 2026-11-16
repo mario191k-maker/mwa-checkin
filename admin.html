@@ -1,0 +1,1346 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Master Control Panel (Admin) | ระบบบริหารจัดการงานสัมมนาสหกรณ์ฯ</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600;700&family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: { mwa: { navy: '#083AA9', blue: '#1363DF', sky: '#47B5FF', cyan: '#00B4D8', deep: '#003B93' } },
+          fontFamily: {
+            sans: ['Prompt', 'Sarabun', 'sans-serif'],
+          }
+        }
+      }
+    };
+  </script>
+
+  <!-- LINE LIFF SDK v2 -->
+  <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <!-- PapaParse for Client-Side CSV Parsing -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+
+  <style>
+    body {
+      font-family: 'Prompt', 'Sarabun', sans-serif;
+    }
+  </style>
+</head>
+<body class="bg-white text-slate-800 min-h-screen">
+
+  <!-- Top Header -->
+  <header class="bg-white/95 border-b border-slate-200 sticky top-0 z-30">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 py-3.5 flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center space-x-3">
+        <img src="assets/logo.png" alt="Logo" class="w-10 h-10 rounded-full border-2 border-amber-400" />
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-base font-bold text-slate-800">Master Control Panel (Super Admin)</h1>
+            <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-600 border border-amber-500/40">PDPA COMPLIANT</span>
+          </div>
+          <p id="admin-identity-label" class="text-xs text-slate-500">รอการยืนยันตัวตนด้วย LINE Login + Super Admin PIN</p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2 text-xs">
+        <a href="index.html" class="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700">หน้าสมาชิก</a>
+        <a href="staff.html" class="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700">หน้า Staff/Kiosk</a>
+        <a href="luckydraw.html" class="px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-600 border border-amber-500/40 font-semibold">🎁 สุ่มรางวัล (Lucky Draw)</a>
+        <a href="dashboard.html" class="px-3 py-1.5 rounded-lg bg-mwa-blue hover:bg-mwa-navy text-white font-semibold">Live Dashboard</a>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 py-6">
+
+    <!-- ================================================================== -->
+    <!-- PROTECTED GATE: LINE LOGIN + 6-DIGIT SUPER ADMIN PIN               -->
+    <!-- ================================================================== -->
+    <section id="gate-pin-login" class="max-w-md mx-auto my-10 bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-5">
+      <div class="text-center space-y-2">
+        <div class="w-16 h-16 rounded-2xl bg-amber-500/20 border border-amber-400/40 text-amber-600 flex items-center justify-center text-3xl mx-auto">
+          🔐
+        </div>
+        <h2 class="text-xl font-bold text-slate-800">ยืนยันสิทธิ์ผู้ดูแลระบบสูงสุด</h2>
+        <p class="text-xs text-slate-500 leading-relaxed">
+          ต้องใช้บัญชี LINE ที่มีสถานะ <code class="text-amber-600">ADMIN</code> ในตาราง <code class="text-amber-600">staff_roles</code> ร่วมกับรหัสผ่าน Super Admin PIN 6 หลัก
+        </p>
+      </div>
+
+      <div class="p-3 rounded-xl bg-white border border-slate-200 text-xs space-y-1">
+        <div class="flex justify-between">
+          <span class="text-slate-500">บัญชี LINE ปัจจุบัน:</span>
+          <span id="gate-line-name" class="font-semibold text-mwa-blue">กำลังโหลด...</span>
+        </div>
+        <div class="flex justify-between">
+          <span class="text-slate-500">LINE UID:</span>
+          <span id="gate-line-uid" class="font-mono text-slate-600 select-all">-</span>
+        </div>
+      </div>
+
+      <form id="form-admin-unlock" class="space-y-4">
+        <div id="gate-error-box" class="hidden p-3 rounded-xl bg-rose-50 border border-rose-500/40 text-rose-700 text-xs"></div>
+
+        <div>
+          <label for="input-admin-pin" class="block text-xs font-semibold text-slate-600 mb-1.5">
+            รหัสผ่าน Super Admin PIN (6 หลัก)
+          </label>
+          <input id="input-admin-pin" type="password" inputmode="numeric" maxlength="12" required
+            placeholder="••••••"
+            class="w-full px-4 py-3 rounded-xl bg-white border border-slate-300 focus:border-amber-400 outline-none text-center text-2xl tracking-[0.5em] font-bold text-amber-600" />
+          <p class="text-[11px] text-slate-500 mt-1 text-center">
+            (สำหรับโหมดทดสอบ Demo ค่าเริ่มต้นคือ <code class="text-slate-600">123456</code>)
+          </p>
+        </div>
+
+        <button id="btn-unlock-admin" type="submit"
+          class="w-full py-3.5 rounded-xl font-bold text-slate-950 bg-gradient-to-r from-amber-400 to-yellow-400 hover:from-amber-500 hover:to-yellow-500 transition shadow-lg text-sm">
+          เข้าสู่ระบบควบคุมหลัก (Unlock Control Panel)
+        </button>
+      </form>
+    </section>
+
+    <!-- ================================================================== -->
+    <!-- UNLOCKED MASTER CONTROL PANEL                                      -->
+    <!-- ================================================================== -->
+    <div id="admin-workspace" class="hidden space-y-6">
+
+      <!-- Status Toast Notification Bar -->
+      <div id="admin-toast" class="hidden fixed bottom-5 right-5 z-50 max-w-md px-4 py-3 rounded-2xl shadow-2xl border text-xs font-semibold"></div>
+
+      <!-- Grid Layout -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+        <!-- ============================================================== -->
+        <!-- LEFT 7 COLS: MASTER FEATURE SWITCHES & ANNOUNCEMENT BANNER     -->
+        <!-- ============================================================== -->
+        <div class="lg:col-span-7 space-y-6">
+
+          <!-- Card 1: Master Feature Switches -->
+          <section class="bg-white border border-slate-200 rounded-2xl p-6 space-y-5 shadow-xl">
+            <div class="flex items-center justify-between border-b border-slate-200 pb-4">
+              <div>
+                <h2 class="text-base font-bold text-slate-800 flex items-center gap-2">
+                  🎛️ สวิตช์ควบคุมระบบหลัก (Master Feature Toggles)
+                </h2>
+                <p class="text-xs text-slate-500">เปิด-ปิดฟีเจอร์แบบเรียลไทม์ มีผลต่อหน้าสมาชิกและเจ้าหน้าที่ทันที</p>
+              </div>
+            </div>
+
+            <div id="toggles-container" class="divide-y divide-slate-200">
+              <!-- Populated dynamically from toggleDefinitions -->
+            </div>
+
+            <!-- Dynamic QR Interval & Event Name + Announcement Settings -->
+            <form id="form-text-settings" class="pt-4 border-t border-slate-200 space-y-4">
+              <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div class="sm:col-span-2">
+                  <label class="block text-xs font-semibold text-slate-600 mb-1">ชื่องานอบรมสัมมนา (แสดงบนหัวเว็บและใบประกาศฯ)</label>
+                  <input id="input-event-name" type="text"
+                    class="w-full px-3.5 py-2 rounded-xl bg-white border border-slate-300 text-xs text-slate-800 focus:border-mwa-blue outline-none" />
+                </div>
+                <div>
+                  <label class="block text-xs font-semibold text-slate-600 mb-1">รอบเปลี่ยน Kiosk QR (วินาที)</label>
+                  <input id="input-qr-interval" type="number" min="5" max="300" value="20"
+                    class="w-full px-3.5 py-2 rounded-xl bg-white border border-slate-300 text-xs text-slate-800 focus:border-mwa-blue outline-none" />
+                </div>
+              </div>
+
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-xs font-semibold text-slate-600 mb-1">สีหลักของระบบ (Theme Color)</label>
+                  <div class="flex items-center gap-2">
+                    <input id="input-theme-color" type="color" value="#006699"
+                      class="w-10 h-9 p-0.5 rounded-lg bg-white border border-slate-300 cursor-pointer" />
+                    <input id="input-theme-hex" type="text" value="#006699" placeholder="#006699"
+                      class="flex-1 px-3 py-2 rounded-xl bg-white border border-slate-300 text-xs font-mono text-slate-800 focus:border-mwa-blue outline-none" />
+                  </div>
+                </div>
+                <div>
+                  <label class="block text-xs font-semibold text-slate-600 mb-1">ช่องทางติดต่อ Helpdesk หน้างาน</label>
+                  <input id="input-helpdesk-contact" type="text" placeholder="เช่น โทร 02-500-2222 ต่อ 1234 หรือไลน์ @mwacoop"
+                    class="w-full px-3.5 py-2 rounded-xl bg-white border border-slate-300 text-xs text-slate-800 focus:border-mwa-blue outline-none" />
+                </div>
+              </div>
+
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">ข้อความประกาศด่วนบนหน้าจอสมาชิก (Announcement Banner)</label>
+                <textarea id="input-announcement" rows="2"
+                  placeholder="เว้นว่างไว้หากไม่ต้องการแสดงแถบประกาศ..."
+                  class="w-full px-3.5 py-2 rounded-xl bg-white border border-slate-300 text-xs text-slate-800 focus:border-mwa-blue outline-none"></textarea>
+              </div>
+
+              <button type="submit"
+                class="px-5 py-2.5 rounded-xl bg-mwa-blue hover:bg-mwa-navy text-xs font-bold text-white shadow">
+                💾 บันทึกการตั้งค่าระบบ
+              </button>
+            </form>
+          </section>
+
+          <!-- Card 2: Bulk CSV Uploader (PapaParse + Client-side SHA-256 Hashing) -->
+          <section class="bg-white border border-slate-200 rounded-2xl p-6 space-y-4 shadow-xl">
+            <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-4">
+              <div>
+                <h2 class="text-base font-bold text-slate-800">📥 นำเข้ารายชื่อสมาชิกจำนวนมาก (Bulk CSV Uploader)</h2>
+                <p class="text-xs text-slate-500">
+                  รองรับ 10,000+ รายชื่อ โดยเข้ารหัสเบอร์โทรศัพท์ <code class="text-emerald-600">SHA-256</code> บนเบราว์เซอร์ก่อนส่งขึ้นฐานข้อมูล (Batch ละ 500 รายการ)
+                </p>
+              </div>
+              <button id="btn-download-sample-csv" type="button"
+                class="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-semibold text-mwa-blue border border-slate-300">
+                ⬇️ ดาวน์โหลดไฟล์ CSV ตัวอย่าง
+              </button>
+            </div>
+
+            <div class="p-4 rounded-xl bg-white border border-dashed border-slate-300 space-y-3">
+              <p class="text-xs text-slate-600">
+                ไฟล์ CSV ใช้แค่ 2 คอลัมน์: <code class="text-amber-600">เลขสมาชิก,ชื่อ-นามสกุล</code>
+                <span class="block text-slate-400 mt-1">แยกเป็น ชื่อ / นามสกุล ก็ได้ · คอลัมน์อื่นในไฟล์จะถูกข้าม · รายชื่อในระบบจะเป็นไปตามไฟล์ล่าสุดที่นำเข้า</span>
+              </p>
+              <input id="input-csv-file" type="file" accept=".csv"
+                class="block w-full text-xs text-slate-600 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-sky-600 file:text-white hover:file:bg-sky-500" />
+            </div>
+
+            <!-- Upload Progress Bar -->
+            <div id="csv-progress-box" class="hidden space-y-2">
+              <div class="flex justify-between text-xs">
+                <span id="csv-status-label" class="text-mwa-blue font-semibold">กำลังประมวลผล...</span>
+                <span id="csv-progress-pct" class="font-mono text-slate-600">0%</span>
+              </div>
+              <div class="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden">
+                <div id="csv-progress-bar" class="h-full bg-emerald-500 transition-all duration-300" style="width: 0%"></div>
+              </div>
+            </div>
+
+            <button id="btn-start-csv-import" type="button"
+              class="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-xs font-bold text-white shadow">
+              🚀 เริ่มเข้ารหัส SHA-256 และนำเข้าข้อมูล
+            </button>
+          </section>
+
+        </div>
+
+        <!-- ============================================================== -->
+        <!-- RIGHT 5 COLS: HELPDESK OVERRIDE, STAFF ROLES, PDPA PURGE       -->
+        <!-- ============================================================== -->
+        <div class="lg:col-span-5 space-y-6">
+
+          <!-- Card 3: Member Management (Helpdesk Override) -->
+          <section class="bg-white border border-slate-200 rounded-2xl p-6 space-y-4 shadow-xl">
+            <div class="border-b border-slate-200 pb-3">
+              <h2 class="text-base font-bold text-slate-800">🛠️ ระบบช่วยเหลือสมาชิกหน้างาน (Helpdesk Override)</h2>
+              <p class="text-xs text-slate-500">ค้นหาด้วยเลขทะเบียนสมาชิกหรือชื่อ เพื่อรีเซ็ต LINE, แก้ไขเบอร์โทร หรือเช็คอินด้วยมือ</p>
+            </div>
+
+            <form id="form-helpdesk-search" class="flex gap-2">
+              <input id="input-helpdesk-query" type="text" required
+                placeholder="เลขทะเบียนสมาชิก (เช่น 00001) หรือ ชื่อ..."
+                class="flex-1 px-3.5 py-2.5 rounded-xl bg-white border border-slate-300 text-xs text-slate-800 focus:border-mwa-blue outline-none" />
+              <button type="submit"
+                class="px-4 py-2.5 rounded-xl bg-mwa-blue hover:bg-mwa-navy text-xs font-bold text-white shrink-0">
+                🔍 ค้นหา
+              </button>
+            </form>
+
+            <div id="helpdesk-results" class="space-y-3 max-h-[380px] overflow-y-auto">
+              <p class="text-xs text-slate-500 italic text-center py-4">กรอกเลขทะเบียนสมาชิกเพื่อค้นหาและจัดการข้อมูล</p>
+            </div>
+          </section>
+
+          <!-- Card 4: Staff & Admin Role Management -->
+          <section class="bg-white border border-slate-200 rounded-2xl p-6 space-y-4 shadow-xl">
+            <div class="border-b border-slate-200 pb-3">
+              <h2 class="text-base font-bold text-slate-800">👮 จัดการสิทธิ์เจ้าหน้าที่ (Staff Roles)</h2>
+              <p class="text-xs text-slate-500">เพิ่มหรือถอนสิทธิ์ LINE User ID สำหรับเข้าหน้า Staff Scanner และ Admin</p>
+            </div>
+
+            <form id="form-add-staff" class="grid grid-cols-1 sm:grid-cols-12 gap-2">
+              <input id="input-staff-uid" type="text" required placeholder="LINE User ID (U...)"
+                class="sm:col-span-5 px-3 py-2 rounded-xl bg-white border border-slate-300 text-xs text-slate-800 font-mono" />
+              <input id="input-staff-name" type="text" required placeholder="ชื่อเจ้าหน้าที่"
+                class="sm:col-span-4 px-3 py-2 rounded-xl bg-white border border-slate-300 text-xs text-slate-800" />
+              <select id="select-staff-role"
+                class="sm:col-span-3 px-2 py-2 rounded-xl bg-white border border-slate-300 text-xs text-slate-800 font-bold">
+                <option value="STAFF">STAFF</option>
+                <option value="ADMIN">ADMIN</option>
+              </select>
+              <button type="submit"
+                class="sm:col-span-12 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 border border-slate-300 text-xs font-bold text-mwa-blue">
+                + บันทึกสิทธิ์เจ้าหน้าที่
+              </button>
+            </form>
+
+            <div id="staff-list-container" class="space-y-2 max-h-44 overflow-y-auto text-xs"></div>
+          </section>
+
+          <!-- Card 4.4: Self Check-in / Check-out (iPad kiosk + reset) -->
+          <section class="bg-white border border-slate-200 rounded-2xl p-6 space-y-4 shadow-xl">
+            <div class="border-b border-slate-200 pb-3">
+              <h2 class="text-base font-bold text-slate-800">📲 จอ iPad เช็คอิน / เช็คเอาท์</h2>
+              <p class="text-xs text-slate-500">เปิด/ปิดเช็คอินและเช็คเอาท์แยกกัน จอ iPad จะแสดงสถานะ เวลาที่เปิด และกำหนดการที่กรอกไว้</p>
+            </div>
+            <div class="grid sm:grid-cols-2 gap-3">
+              <div class="rounded-xl border border-sky-500/30 bg-sky-500/5 p-4 space-y-3">
+                <div class="flex items-center justify-between gap-3">
+                  <div>
+                    <p class="text-sm font-bold text-mwa-navy">เช็คอิน (ประตูเข้า)</p>
+                    <p id="self-in-state" class="text-xs text-slate-500">-</p>
+                  </div>
+                  <label class="relative inline-flex items-center cursor-pointer shrink-0">
+                    <input id="self-switch-in" type="checkbox" class="sr-only peer" />
+                    <div class="w-12 h-6 bg-slate-700 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
+                  </label>
+                </div>
+                <div class="grid grid-cols-2 gap-2 text-[11px] text-slate-500">
+                  <label>เปิดเวลา
+                    <input id="self-open-in" type="datetime-local"
+                      class="mt-1 w-full px-2 py-2 rounded-xl bg-white border border-slate-300 text-xs text-slate-800 outline-none focus:border-mwa-blue [color-scheme:dark]" />
+                  </label>
+                  <label>ปิดเวลา
+                    <input id="self-close-in" type="datetime-local"
+                      class="mt-1 w-full px-2 py-2 rounded-xl bg-white border border-slate-300 text-xs text-slate-800 outline-none focus:border-mwa-blue [color-scheme:dark]" />
+                  </label>
+                </div>
+              </div>
+              <div class="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4 space-y-3">
+                <div class="flex items-center justify-between gap-3">
+                  <div>
+                    <p class="text-sm font-bold text-emerald-700">เช็คเอาท์ (ประตูออก)</p>
+                    <p id="self-out-state" class="text-xs text-slate-500">-</p>
+                  </div>
+                  <label class="relative inline-flex items-center cursor-pointer shrink-0">
+                    <input id="self-switch-out" type="checkbox" class="sr-only peer" />
+                    <div class="w-12 h-6 bg-slate-700 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
+                  </label>
+                </div>
+                <div class="grid grid-cols-2 gap-2 text-[11px] text-slate-500">
+                  <label>เปิดเวลา
+                    <input id="self-open-out" type="datetime-local"
+                      class="mt-1 w-full px-2 py-2 rounded-xl bg-white border border-slate-300 text-xs text-slate-800 outline-none focus:border-emerald-500 [color-scheme:dark]" />
+                  </label>
+                  <label>ปิดเวลา
+                    <input id="self-close-out" type="datetime-local"
+                      class="mt-1 w-full px-2 py-2 rounded-xl bg-white border border-slate-300 text-xs text-slate-800 outline-none focus:border-emerald-500 [color-scheme:dark]" />
+                  </label>
+                </div>
+              </div>
+            </div>
+            <p class="text-[11px] text-slate-500 leading-relaxed">
+              เวลาทั้งหมดเป็น<strong>เวลาไทย</strong> · สวิตช์ <strong>เปิด</strong> = อนุญาตให้ใช้งาน · ถ้ากำหนดเวลาไว้ ระบบจะเปิด–ปิดเองตามเวลา (เว้นว่าง = ไม่จำกัดเวลา) ·
+              สวิตช์ <strong>ปิด</strong> = ปิดทันทีไม่ว่าเวลาใด
+            </p>
+            <button id="btn-save-schedule" type="button"
+              class="w-full py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-800 font-semibold text-xs">💾 บันทึกเวลาเปิด–ปิด</button>
+            <p class="text-[11px] text-slate-500">ลิงก์จอ iPad: <code>kiosk.html</code> (เข้า) · <code>kiosk.html?a=out</code> (ออก)</p>
+            <a href="dashboard.html" target="_blank" class="block text-center text-xs text-mwa-blue hover:underline">ดูรายชื่อผู้เช็คอิน/เช็คเอาท์ที่หน้า Dashboard →</a>
+            <div class="rounded-xl border border-rose-500/40 bg-rose-50 p-4 space-y-2">
+              <p class="text-xs text-rose-700">ล้างเวลาเช็คอิน/เช็คเอาท์ของสมาชิกทุกคน (รายชื่อสมาชิกยังอยู่) ย้อนกลับไม่ได้</p>
+              <input id="input-attendance-reset-confirm" type="text" placeholder="พิมพ์คำว่า ล้างข้อมูล"
+                class="w-full px-3.5 py-2.5 rounded-xl bg-white border border-rose-500/50 text-xs text-slate-800 outline-none" />
+              <button id="btn-attendance-reset" type="button"
+                class="w-full py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs">🗑️ ล้างข้อมูลเช็คอิน/เช็คเอาท์ทั้งหมด</button>
+            </div>
+          </section>
+
+          <!-- Card 4.45: Member-facing messages (editable) -->
+          <section class="bg-white border border-slate-200 rounded-2xl p-6 space-y-4 shadow-xl">
+            <div class="border-b border-slate-200 pb-3">
+              <h2 class="text-base font-bold text-slate-800">💬 ข้อความแจ้งสมาชิก (หน้ามือถือหลังสแกน QR)</h2>
+              <p class="text-xs text-slate-500">แก้ข้อความที่สมาชิกเห็นได้เอง · ช่องที่ว่างจะใช้ข้อความเริ่มต้น (สีเทาในช่อง)</p>
+            </div>
+            <div id="msg-fields" class="space-y-3"></div>
+            <div class="flex gap-2">
+              <button id="btn-save-messages" type="button"
+                class="flex-1 py-2.5 rounded-xl bg-mwa-blue hover:bg-mwa-navy text-white font-bold text-xs">💾 บันทึกข้อความ</button>
+              <button id="btn-reset-messages" type="button"
+                class="py-2.5 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-700 font-semibold text-xs">↺ คืนค่าเริ่มต้นทั้งหมด</button>
+            </div>
+          </section>
+
+          <!-- Card 4.5: Lucky Draw Winner Management -->
+          <section class="bg-white border border-slate-200 rounded-2xl p-6 space-y-4 shadow-xl">
+            <div class="flex items-center justify-between border-b border-slate-200 pb-3">
+              <div>
+                <h2 class="text-base font-bold text-slate-800 flex items-center gap-2">
+                  <span class="text-amber-600">🎁</span> จัดการการสุ่มจับรางวัล (Lucky Draw Management)
+                </h2>
+                <p class="text-xs text-slate-500">เปิดหน้าจอเวทีสุ่มผู้โชคดี หรือรีเซ็ตรายชื่อผู้ได้รับรางวัล</p>
+              </div>
+            </div>
+
+            <div class="flex flex-col sm:flex-row gap-3">
+              <a href="luckydraw.html" target="_blank"
+                class="flex-1 py-2.5 px-4 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-600 hover:to-yellow-600 text-slate-950 font-bold text-xs shadow text-center flex items-center justify-center gap-1.5">
+                <span>🖥️ เปิดหน้าจอเวทีจับรางวัล (luckydraw.html)</span>
+              </a>
+              <button id="btn-reset-luckydraw" type="button"
+                class="py-2.5 px-4 rounded-xl bg-slate-100 hover:bg-rose-50 hover:text-rose-600 border border-slate-300 hover:border-rose-500/50 text-slate-600 font-semibold text-xs transition flex items-center justify-center gap-1.5">
+                <span>🔄 ล้าง/รีเซ็ตผลรางวัลทั้งหมด</span>
+              </button>
+            </div>
+          </section>
+
+          <!-- Card 5: PDPA Data Purge Danger Zone -->
+          <section class="bg-rose-50 border-2 border-rose-500/50 rounded-2xl p-6 space-y-4 shadow-xl">
+            <div class="flex items-start justify-between">
+              <div>
+                <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-600 text-white uppercase tracking-wider">DANGER ZONE - PDPA DATA PURGE</span>
+                <h2 class="text-base font-bold text-rose-700 mt-1">ทำลายข้อมูลส่วนบุคคลหลังจบงานสัมมนา</h2>
+              </div>
+              <span class="text-2xl">⚠️</span>
+            </div>
+
+            <p class="text-xs text-rose-700/80 leading-relaxed">
+              การดำเนินการนี้จะลบ <strong>ชื่อ-นามสกุล, รหัสแฮชเบอร์โทรศัพท์ (phone_hash) และ LINE User ID</strong> ออกจากตาราง <code class="text-slate-800">participants</code> อย่างถาวรไม่สามารถกู้คืนได้ โดยจะคงเหลือเฉพาะสถิติจำนวนผู้เข้าร่วมงานแยกตามประเภทสมาชิกเท่านั้น
+            </p>
+
+            <div class="space-y-2">
+              <label class="block text-[11px] text-rose-600 font-semibold">
+                พิมพ์คำว่า <code class="bg-slate-100 px-1.5 py-0.5 rounded text-slate-800 select-all">CONFIRM_PURGE_EVENT_DATA</code> เพื่อยืนยัน:
+              </label>
+              <input id="input-purge-confirm" type="text"
+                placeholder="CONFIRM_PURGE_EVENT_DATA"
+                class="w-full px-3.5 py-2.5 rounded-xl bg-white border border-rose-500/50 text-xs font-mono text-slate-800 focus:border-rose-400 outline-none" />
+              <button id="btn-execute-purge" type="button"
+                class="w-full py-3 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs shadow-lg transition">
+                🗑️ ลบข้อมูลส่วนบุคคลทั้งหมดอย่างถาวร (Execute PDPA Purge)
+              </button>
+            </div>
+          </section>
+
+        </div>
+
+      </div>
+
+      <!-- Imported member roster -->
+      <section class="bg-white border border-slate-200 rounded-2xl p-6 space-y-4 shadow-xl">
+        <div class="flex flex-wrap items-end justify-between gap-3 border-b border-slate-200 pb-3">
+          <div>
+            <h2 class="text-base font-bold text-slate-800">📋 รายชื่อสมาชิกที่นำเข้าระบบ</h2>
+            <p class="text-xs text-slate-500">ทั้งหมด <strong id="roster-total">0</strong> ท่าน ·
+              เช็คอินแล้ว <strong id="roster-in" class="text-mwa-blue">0</strong> ·
+              เช็คเอาท์แล้ว <strong id="roster-out" class="text-emerald-600">0</strong>
+              <span id="roster-purged-warn" class="hidden ml-1 px-2 py-0.5 rounded bg-rose-50 text-rose-700 font-semibold"></span>
+            </p>
+          </div>
+          <div class="flex gap-2">
+            <input id="roster-search" type="search" placeholder="ค้นหาเลขสมาชิก / ชื่อ"
+              class="px-3 py-2 rounded-xl bg-white border border-slate-300 text-xs text-slate-800 outline-none focus:border-mwa-blue w-48" />
+            <button id="btn-roster-refresh" type="button"
+              class="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 border border-slate-300 text-xs font-semibold text-slate-700">🔄 รีเฟรช</button>
+          </div>
+        </div>
+        <div class="overflow-x-auto max-h-[520px] overflow-y-auto">
+          <table class="w-full text-xs">
+            <thead class="sticky top-0 bg-white text-slate-500">
+              <tr class="border-b border-slate-200">
+                <th class="text-left py-2 pr-2">#</th><th class="text-left py-2 pr-2">เลขสมาชิก</th>
+                <th class="text-left py-2 pr-2">ชื่อ-นามสกุล</th>
+                <th class="text-left py-2 pr-2">เช็คอิน</th><th class="text-left py-2 pr-2">เช็คเอาท์</th>
+              </tr>
+            </thead>
+            <tbody id="roster-rows" class="divide-y divide-slate-100">
+              <tr><td colspan="5" class="py-6 text-center text-slate-500">กำลังโหลด...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Audit Logs Table -->
+      <section class="bg-white border border-slate-200 rounded-2xl p-6 space-y-3 shadow-xl">
+        <h3 class="text-sm font-bold text-slate-700">📜 ประวัติการปฏิบัติงานของผู้ดูแลระบบล่าสุด (Immutable Audit Logs)</h3>
+        <div id="audit-logs-container" class="text-xs text-slate-500 space-y-1.5 max-h-48 overflow-y-auto font-mono"></div>
+      </section>
+
+    </div>
+  </main>
+
+  <script src="js/config.js"></script>
+  <script src="js/liff-helper.js"></script>
+  <script>
+    (function () {
+      let verifiedPin = "";
+      let currentSettings = {};
+
+      const toggleDefinitions = [
+        {
+          key: "is_system_active",
+          title: "เปิดใช้งานระบบทั้งหมด (Master System Active)",
+          desc: "หากปิด หน้าลงทะเบียนและหน้าสแกนทั้งหมดจะแสดงสถานะปิดปรับปรุงชั่วคราว",
+        },
+        {
+          key: "enable_registration",
+          title: "เปิดรับลงทะเบียนผูกบัญชี LINE (Member Self-Registration)",
+          desc: "อนุญาตให้สมาชิกยืนยันเลขทะเบียนและเบอร์โทรศัพท์เพื่อออกบัตร E-Ticket",
+        },
+        {
+          key: "enable_checkin",
+          title: "เปิดระบบเช็คอินเข้างาน (Check-in Open)",
+          desc: "อนุญาตให้สแกนเช็คอินเข้างานทั้งโหมด Kiosk และโหมดเจ้าหน้าที่",
+        },
+        {
+          key: "enable_checkout",
+          title: "เปิดระบบเช็คเอาท์หลังจบงาน (Check-out Open)",
+          desc: "อนุญาตให้บันทึกเวลาออกจากงานสัมมนา",
+        },
+        {
+          key: "enable_kiosk_mode",
+          title: "เปิดโหมดสมาชิกสแกนป้าย Kiosk ด้วยตนเอง (Kiosk Mode)",
+          desc: "แสดงปุ่มเปิดกล้องสแกนป้าย Kiosk บนหน้าบัตร E-Ticket ของสมาชิก",
+        },
+        {
+          key: "enable_staff_scanner",
+          title: "เปิดโหมดเจ้าหน้าที่สแกน (Staff Scanner Mode)",
+          desc: "อนุญาตให้เจ้าหน้าที่ใช้แท็บเล็ต/มือถือสแกน E-Ticket ของสมาชิก",
+        },
+        {
+          key: "enable_dynamic_qr",
+          title: "เปิดระบบป้องกันการทุจริต Dynamic QR (Anti-Cheat Rotating QR)",
+          desc: "บังคับตรวจสอบลายเซ็น HMAC-SHA256 และอายุเวลา 30 วินาทีของป้าย Kiosk",
+        },
+        {
+          key: "enable_certificate",
+          title: "เปิดให้ดาวน์โหลดใบประกาศนียบัตร (Certificate Issuance)",
+          desc: "แสดงปุ่มดาวน์โหลดไฟล์ PDF ใบประกาศนียบัตรสำหรับผู้ที่เช็คอินแล้ว",
+        },
+        {
+          key: "require_checkout_for_cert",
+          title: "บังคับเช็คเอาท์ก่อนรับใบประกาศฯ (Require Check-out for Cert)",
+          desc: "สมาชิกต้องมีทั้งเวลา Check-in และ Check-out จึงจะดาวน์โหลดใบประกาศฯ ได้",
+        },
+        {
+          key: "enable_photo_consent",
+          title: "แสดงตัวเลือกความยินยอมถ่ายภาพในงาน (Photo Consent Checkbox)",
+          desc: "แสดงกล่องเลือกยินยอมให้ถ่ายภาพประชาสัมพันธ์ในขั้นตอน PDPA",
+        },
+        {
+          key: "enable_souvenir_claim",
+          title: "เปิดระบบแจกของที่ระลึก (Souvenir Claim)",
+          desc: "อนุญาตให้เจ้าหน้าที่สแกนบันทึกการรับของที่ระลึกหน้างาน",
+        },
+        {
+          key: "enable_meal_claim",
+          title: "เปิดระบบแจกอาหารว่างหลังเช็คเอาท์ (Snack Claim after Check-out)",
+          desc: "อนุญาตให้เจ้าหน้าที่สแกนบันทึกการรับอาหารว่างเมื่อสมาชิกเช็คเอาท์แล้ว",
+        },
+        {
+          key: "enable_lucky_draw",
+          title: "เปิดระบบสุ่มจับรางวัล (Lucky Draw Module)",
+          desc: "เปิดให้ใช้งานหน้าเวที luckydraw.html สุ่มผู้โชคดีจากผู้เช็คอิน",
+        },
+        {
+          key: "enable_badge_printing",
+          title: "เปิดระบบพิมพ์ป้ายชื่อ / สติกเกอร์ (Thermal Badge Printing)",
+          desc: "แสดงปุ่มพิมพ์สติกเกอร์ขนาด 80mm บนหน้า Staff Scanner",
+        },
+        {
+          key: "auto_print_badge",
+          title: "พิมพ์ป้ายชื่ออัตโนมัติเมื่อเช็คอิน (Auto-print Badge on Check-in)",
+          desc: "สั่งพิมพ์สติกเกอร์ทันทีที่สแกนเช็คอินสำเร็จโดยไม่ต้องกดปุ่ม",
+        },
+        {
+          key: "enable_line_flex_ticket",
+          title: "เปิดปุ่มแชร์/บันทึกบัตรเข้า LINE Chat (Save to LINE Button)",
+          desc: "แสดงปุ่มส่งบัตร Flex Message เข้าแชท LINE ฟรี 0 THB",
+        },
+      ];
+
+      function showAdminToast(msg, isError = false) {
+        const el = document.getElementById("admin-toast");
+        el.textContent = msg;
+        el.className = isError
+          ? "fixed bottom-5 right-5 z-50 max-w-md px-4 py-3 rounded-2xl shadow-2xl border bg-rose-50 border-rose-500 text-rose-700 text-xs font-semibold"
+          : "fixed bottom-5 right-5 z-50 max-w-md px-4 py-3 rounded-2xl shadow-2xl border bg-emerald-50 border-emerald-500 text-emerald-700 text-xs font-semibold";
+        el.classList.remove("hidden");
+        setTimeout(() => el.classList.add("hidden"), 3800);
+      }
+
+      function renderToggles(settings) {
+        currentSettings = settings || {};
+        const container = document.getElementById("toggles-container");
+        container.innerHTML = toggleDefinitions
+          .map((item) => {
+            const checked = Boolean(currentSettings[item.key]);
+            return `
+              <div class="py-3.5 flex items-center justify-between gap-4">
+                <div>
+                  <p class="text-sm font-bold text-slate-800">${item.title}</p>
+                  <p class="text-xs text-slate-500">${item.desc}</p>
+                </div>
+                <label class="relative inline-flex items-center cursor-pointer shrink-0">
+                  <input type="checkbox" data-toggle-key="${item.key}" ${checked ? "checked" : ""} class="sr-only peer" />
+                  <div class="w-12 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
+                </label>
+              </div>
+            `;
+          })
+          .join("");
+
+        // Bind immediate change events
+        container.querySelectorAll("input[data-toggle-key]").forEach((chk) => {
+          chk.addEventListener("change", async (e) => {
+            const key = e.target.getAttribute("data-toggle-key");
+            const val = e.target.checked;
+            try {
+              const res = await window.invokeEdgeFunction("admin-action", {
+                idToken: window.LiffHelper.getIdToken(),
+                admin_pin: verifiedPin,
+                action: "UPDATE_SETTINGS",
+                payload: { [key]: val },
+              });
+              currentSettings = res.settings;
+              showAdminToast(`อัปเดต ${key} = ${val ? "ON" : "OFF"} สำเร็จ`);
+            } catch (err) {
+              e.target.checked = !val; // revert on error
+              showAdminToast(err.message, true);
+            }
+          });
+        });
+
+        document.getElementById("input-event-name").value = currentSettings.event_name || "";
+        document.getElementById("input-qr-interval").value = currentSettings.dynamic_qr_interval_sec || 20;
+        document.getElementById("input-announcement").value = currentSettings.announcement_text || "";
+        
+        const themeColor = currentSettings.theme_color || "#006699";
+        const themeColInput = document.getElementById("input-theme-color");
+        const themeHexInput = document.getElementById("input-theme-hex");
+        if (themeColInput) themeColInput.value = themeColor;
+        if (themeHexInput) themeHexInput.value = themeColor;
+        
+        const helpdeskContactInput = document.getElementById("input-helpdesk-contact");
+        if (helpdeskContactInput) helpdeskContactInput.value = currentSettings.helpdesk_contact || "";
+
+        renderSelfCard(currentSettings);
+        renderMessageFields(currentSettings);
+        if (!rosterLoadedOnce) { rosterLoadedOnce = true; loadRoster(); }
+      }
+
+      // ---------------- Editable member-facing messages ----------------
+      // keep keys/defaults in sync with supabase/functions/_shared/messages.ts
+      const MESSAGE_FIELDS = [
+        { key: "not_registered_title", label: "ไม่ได้ลงทะเบียน: หัวข้อ", def: "ท่านไม่ได้ลงทะเบียนไว้" },
+        { key: "not_registered_detail", label: "ไม่ได้ลงทะเบียน: รายละเอียด", def: "ไม่พบเลขสมาชิกนี้ในรายชื่อผู้ลงทะเบียนสัมมนา กรุณาติดต่อเจ้าหน้าที่ที่โต๊ะลงทะเบียน", multi: true },
+        { key: "name_mismatch", label: "ชื่อไม่ตรงกับเลขสมาชิก", def: "ชื่อ-นามสกุลไม่ตรงกับเลขสมาชิกที่ลงทะเบียนไว้ กรุณาตรวจสอบอีกครั้ง หรือติดต่อเจ้าหน้าที่", multi: true },
+        { key: "checkin_success", label: "เช็คอินสำเร็จ", def: "เช็คอินเข้างานสำเร็จ" },
+        { key: "checkin_note", label: "ข้อความเพิ่มเติมหลังเช็คอินสำเร็จ (ไม่บังคับ)", def: "เช่น เชิญรับเอกสารที่โต๊ะ A", multi: true, optional: true },
+        { key: "already_checked_in", label: "เช็คอินซ้ำ", def: "ท่านเช็คอินเข้างานเรียบร้อยแล้ว" },
+        { key: "checkout_success", label: "เช็คเอาท์สำเร็จ", def: "เช็คเอาท์สำเร็จ" },
+        { key: "checkout_note", label: "ข้อความเพิ่มเติมหลังเช็คเอาท์สำเร็จ (ไม่บังคับ)", def: "เช่น ขอบคุณที่เข้าร่วมสัมมนา", multi: true, optional: true },
+        { key: "already_checked_out", label: "เช็คเอาท์ซ้ำ", def: "ท่านเช็คเอาท์เรียบร้อยแล้ว" },
+        { key: "checkout_before_checkin", label: "เช็คเอาท์ก่อนเช็คอิน", def: "ท่านยังไม่ได้เช็คอินเข้างาน จึงยังเช็คเอาท์ไม่ได้ กรุณาติดต่อเจ้าหน้าที่", multi: true },
+      ];
+      const dirtyMessageKeys = new Set();
+      function renderMessageFields(s) {
+        const saved = (s && s.self_messages) || {};
+        const box = document.getElementById("msg-fields");
+        if (!box.childElementCount) {
+          box.innerHTML = MESSAGE_FIELDS.map((f) => `
+            <label class="block">
+              <span class="text-[11px] font-semibold text-slate-600">${f.label}</span>
+              ${f.multi
+                ? `<textarea id="msg-${f.key}" rows="2" maxlength="500" class="mt-1 w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-xs text-slate-800 outline-none focus:border-mwa-blue"></textarea>`
+                : `<input id="msg-${f.key}" type="text" maxlength="500" class="mt-1 w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-xs text-slate-800 outline-none focus:border-mwa-blue" />`}
+            </label>`).join("");
+          MESSAGE_FIELDS.forEach((f) => {
+            const el = document.getElementById(`msg-${f.key}`);
+            el.placeholder = f.def;
+            el.addEventListener("input", () => dirtyMessageKeys.add(f.key));
+          });
+        }
+        MESSAGE_FIELDS.forEach((f) => {
+          const el = document.getElementById(`msg-${f.key}`);
+          if (!dirtyMessageKeys.has(f.key) && document.activeElement !== el) el.value = saved[f.key] || "";
+        });
+      }
+      async function saveMessages(values, okMsg) {
+        try {
+          const res = await window.invokeEdgeFunction("admin-action", {
+            idToken: window.LiffHelper.getIdToken(),
+            admin_pin: verifiedPin,
+            action: "UPDATE_SETTINGS",
+            payload: { self_messages: values },
+          });
+          dirtyMessageKeys.clear();
+          renderToggles(res.settings);
+          showAdminToast(okMsg);
+        } catch (err) {
+          showAdminToast(err.message, true);
+        }
+      }
+      document.getElementById("btn-save-messages").addEventListener("click", () => {
+        const values = {};
+        MESSAGE_FIELDS.forEach((f) => {
+          const v = document.getElementById(`msg-${f.key}`).value.trim();
+          if (v) values[f.key] = v;
+        });
+        saveMessages(values, "บันทึกข้อความแล้ว สมาชิกจะเห็นข้อความใหม่ทันที");
+      });
+      document.getElementById("btn-reset-messages").addEventListener("click", () => {
+        if (!confirm("คืนค่าข้อความทั้งหมดเป็นข้อความเริ่มต้น?")) return;
+        MESSAGE_FIELDS.forEach((f) => { document.getElementById(`msg-${f.key}`).value = ""; });
+        saveMessages({}, "คืนค่าข้อความเริ่มต้นแล้ว");
+      });
+
+      // ---------------- Imported member roster ----------------
+      let rosterLoadedOnce = false;
+      let rosterData = [];
+      function rosterEsc(s) { const d = document.createElement("div"); d.textContent = s == null ? "" : String(s); return d.innerHTML; }
+      function rosterTime(iso) {
+        return iso ? new Date(iso).toLocaleString("th-TH", { timeZone: "Asia/Bangkok", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "";
+      }
+      function renderRoster() {
+        const q = document.getElementById("roster-search").value.trim().toLowerCase();
+        const rows = rosterData.filter((m) => !q ||
+          `${m.member_no} ${m.prefix || ""}${m.first_name} ${m.last_name}`.toLowerCase().includes(q));
+        document.getElementById("roster-rows").innerHTML = rows.length ? rows.map((m, i) => {
+          const purged = m.first_name === "[PURGED]";
+          return `<tr class="${purged ? "bg-rose-50" : ""}">
+            <td class="py-1.5 pr-2 text-slate-400">${i + 1}</td>
+            <td class="py-1.5 pr-2 font-mono text-slate-700">${rosterEsc(m.member_no)}</td>
+            <td class="py-1.5 pr-2 ${purged ? "text-rose-700 font-semibold" : "text-slate-800"}">${purged ? "ข้อมูลถูกลบ (PDPA Purge)" : rosterEsc(`${m.prefix || ""}${m.first_name} ${m.last_name}`)}</td>
+            <td class="py-1.5 pr-2 ${m.checked_in_at ? "text-mwa-blue font-semibold" : "text-slate-300"}">${m.checked_in_at ? rosterEsc(rosterTime(m.checked_in_at)) : "–"}</td>
+            <td class="py-1.5 pr-2 ${m.checked_out_at ? "text-emerald-600 font-semibold" : "text-slate-300"}">${m.checked_out_at ? rosterEsc(rosterTime(m.checked_out_at)) : "–"}</td>
+          </tr>`;
+        }).join("") : `<tr><td colspan="5" class="py-6 text-center text-slate-500">${rosterData.length ? "ไม่พบรายชื่อที่ค้นหา" : "ยังไม่มีรายชื่อในระบบ"}</td></tr>`;
+      }
+      async function loadRoster() {
+        try {
+          const res = await window.invokeEdgeFunction("admin-action", {
+            idToken: window.LiffHelper.getIdToken(),
+            admin_pin: verifiedPin,
+            action: "MEMBER_LIST",
+          });
+          rosterData = res.members || [];
+          document.getElementById("roster-total").textContent = rosterData.length;
+          document.getElementById("roster-in").textContent = rosterData.filter((m) => m.checked_in_at).length;
+          document.getElementById("roster-out").textContent = rosterData.filter((m) => m.checked_out_at).length;
+          const purged = rosterData.filter((m) => m.first_name === "[PURGED]").length;
+          const warn = document.getElementById("roster-purged-warn");
+          warn.textContent = `⚠️ ชื่อถูกลบ ${purged} ท่าน — สมาชิกกลุ่มนี้จะเช็คอินไม่ผ่าน ต้องนำเข้าใหม่`;
+          warn.classList.toggle("hidden", purged === 0);
+          renderRoster();
+        } catch (err) {
+          showAdminToast(err.message, true);
+        }
+      }
+      document.getElementById("roster-search").addEventListener("input", renderRoster);
+      document.getElementById("btn-roster-refresh").addEventListener("click", loadRoster);
+
+      function renderStaffList(list) {
+        const container = document.getElementById("staff-list-container");
+        if (!list || list.length === 0) {
+          container.innerHTML = `<p class="text-slate-500 italic">ไม่มีรายชื่อเจ้าหน้าที่</p>`;
+          return;
+        }
+        container.innerHTML = list
+          .map(
+            (s) => `
+            <div class="flex items-center justify-between bg-white px-3 py-2 rounded-xl border border-slate-200">
+              <div>
+                <p class="font-bold text-slate-700">${s.display_name} <span class="px-1.5 py-0.5 text-[10px] rounded bg-sky-500/20 text-mwa-blue">${s.role}</span></p>
+                <p class="text-[11px] font-mono text-slate-500">${s.line_user_id}</p>
+              </div>
+              <button type="button" data-del-staff="${s.line_user_id}" class="text-rose-600 hover:underline text-xs">ลบ</button>
+            </div>
+          `,
+          )
+          .join("");
+
+        container.querySelectorAll("button[data-del-staff]").forEach((btn) => {
+          btn.addEventListener("click", async () => {
+            const uid = btn.getAttribute("data-del-staff");
+            try {
+              const res = await window.invokeEdgeFunction("admin-action", {
+                idToken: window.LiffHelper.getIdToken(),
+                admin_pin: verifiedPin,
+                action: "MANAGE_STAFF",
+                payload: { sub_action: "DELETE", line_user_id: uid },
+              });
+              renderStaffList(res.staff_list);
+              showAdminToast(`ลบสิทธิ์ ${uid} แล้ว`);
+            } catch (err) {
+              showAdminToast(err.message, true);
+            }
+          });
+        });
+      }
+
+      function renderAuditLogs(logs) {
+        const container = document.getElementById("audit-logs-container");
+        if (!logs || logs.length === 0) {
+          container.innerHTML = `<p class="text-slate-500">ยังไม่มีประวัติการทำรายการ</p>`;
+          return;
+        }
+        container.innerHTML = logs
+          .map(
+            (l) => `
+            <div class="p-2 rounded-lg bg-white border border-slate-200 flex flex-wrap justify-between gap-2">
+              <span><strong class="text-amber-600">[${l.action_type}]</strong> โดย ${l.actor_line_uid}: ${JSON.stringify(l.details)}</span>
+              <span class="text-slate-500">${window.formatThaiDateTime(l.created_at)}</span>
+            </div>
+          `,
+          )
+          .join("");
+      }
+
+      // Unlock Admin Panel Form
+      document.getElementById("form-admin-unlock").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const errBox = document.getElementById("gate-error-box");
+        errBox.classList.add("hidden");
+        const pin = document.getElementById("input-admin-pin").value.trim();
+
+        try {
+          const res = await window.invokeEdgeFunction("admin-action", {
+            idToken: window.LiffHelper.getIdToken(),
+            admin_pin: pin,
+            action: "VERIFY_ADMIN",
+          });
+
+          verifiedPin = pin;
+          document.getElementById("gate-pin-login").classList.add("hidden");
+          document.getElementById("admin-workspace").classList.remove("hidden");
+          document.getElementById("admin-identity-label").textContent =
+            `เข้าสู่ระบบโดย: ${res.admin.display_name} (${res.admin.line_user_id})`;
+
+          renderToggles(res.settings);
+          renderStaffList(res.staff_list);
+          renderAuditLogs(res.audit_logs);
+        } catch (err) {
+          errBox.textContent = err.message;
+          errBox.classList.remove("hidden");
+        }
+      });
+
+      // Color input two-way sync
+      const themeColInput = document.getElementById("input-theme-color");
+      const themeHexInput = document.getElementById("input-theme-hex");
+      if (themeColInput && themeHexInput) {
+        themeColInput.addEventListener("input", (e) => {
+          themeHexInput.value = e.target.value;
+        });
+        themeHexInput.addEventListener("input", (e) => {
+          if (/^#[0-9a-f]{6}$/i.test(e.target.value)) {
+            themeColInput.value = e.target.value;
+          }
+        });
+      }
+
+      // Self check-in card: separate switches for check-in / check-out + schedule text
+      // Schedule is stored as an ISO interval "<openISO>/<closeISO>" (either side may be empty)
+      function parseWindow(raw) {
+        const none = { open: null, close: null };
+        const s = typeof raw === "string" ? raw : "";
+        const parts = s.split("/");
+        if (parts.length !== 2) return none;
+        const [a, b] = parts.map((x) => x.trim());
+        const ISO_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/; // same rule as the server
+        if ((a && !ISO_RE.test(a)) || (b && !ISO_RE.test(b))) return none;
+        const ok = (x) => (x && !isNaN(Date.parse(x)) ? new Date(x) : null);
+        return { open: ok(a), close: ok(b) };
+      }
+      // Date -> value for <input type="datetime-local">, always in Thai time (UTC+7), whatever the device zone
+      function toLocalInput(d) {
+        if (!d) return "";
+        const t = new Date(d.getTime() + 7 * 3600 * 1000);
+        const p = (n) => String(n).padStart(2, "0");
+        return `${t.getUTCFullYear()}-${p(t.getUTCMonth() + 1)}-${p(t.getUTCDate())}T${p(t.getUTCHours())}:${p(t.getUTCMinutes())}`;
+      }
+      function fmt(d) {
+        return d.toLocaleString("th-TH", { timeZone: "Asia/Bangkok", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) + " น.";
+      }
+      // fields the admin has typed into but not saved yet: never overwrite them on refresh
+      const dirtyWindowInputs = new Set();
+      ["self-open-in", "self-close-in", "self-open-out", "self-close-out"].forEach((id) => {
+        document.getElementById(id).addEventListener("input", () => dirtyWindowInputs.add(id));
+      });
+      function selfStateText(enabled, raw) {
+        if (!enabled) return "🔴 ปิดอยู่ (สวิตช์ปิด)";
+        const w = parseWindow(raw), now = Date.now();
+        if (w.open && now < w.open) return `🟡 รอเปิดอัตโนมัติ ${fmt(w.open)}`;
+        if (w.close && now >= w.close) return `⚪ ปิดอัตโนมัติแล้ว ${fmt(w.close)}`;
+        return w.close ? `🟢 เปิดอยู่ · ปิด ${fmt(w.close)}` : "🟢 เปิดอยู่";
+      }
+      function renderSelfCard(s) {
+        s = s || {};
+        document.getElementById("self-switch-in").checked = Boolean(s.enable_checkin);
+        document.getElementById("self-switch-out").checked = Boolean(s.enable_checkout);
+        document.getElementById("self-in-state").textContent = selfStateText(s.enable_checkin, s.checkin_schedule);
+        document.getElementById("self-out-state").textContent = selfStateText(s.enable_checkout, s.checkout_schedule);
+        [["in", s.checkin_schedule], ["out", s.checkout_schedule]].forEach(([k, raw]) => {
+          const w = parseWindow(raw);
+          const o = document.getElementById(`self-open-${k}`), c = document.getElementById(`self-close-${k}`);
+          if (!dirtyWindowInputs.has(o.id) && document.activeElement !== o) o.value = toLocalInput(w.open);
+          if (!dirtyWindowInputs.has(c.id) && document.activeElement !== c) c.value = toLocalInput(w.close);
+        });
+      }
+      // keep the state text current (auto open/close happens on its own)
+      setInterval(() => renderSelfCard(currentSettings), 30000);
+      function readWindow(k) {
+        const o = document.getElementById(`self-open-${k}`).value;
+        const c = document.getElementById(`self-close-${k}`).value;
+        // inputs are Thai time: pin the +07:00 offset so the device's own zone never shifts it
+        const oIso = o ? new Date(`${o}:00+07:00`).toISOString() : "";
+        const cIso = c ? new Date(`${c}:00+07:00`).toISOString() : "";
+        if (oIso && cIso && Date.parse(cIso) <= Date.parse(oIso)) {
+          throw new Error(`${k === "in" ? "เช็คอิน" : "เช็คเอาท์"}: เวลาปิดต้องหลังเวลาเปิด`);
+        }
+        return oIso || cIso ? `${oIso}/${cIso}` : null;
+      }
+      async function saveSelfSettings(payload, okMsg) {
+        const res = await window.invokeEdgeFunction("admin-action", {
+          idToken: window.LiffHelper.getIdToken(),
+          admin_pin: verifiedPin,
+          action: "UPDATE_SETTINGS",
+          payload,
+        });
+        renderToggles(res.settings); // keeps the main switch list and this card in sync
+        showAdminToast(okMsg);
+      }
+      [["self-switch-in", "enable_checkin", "เช็คอิน"], ["self-switch-out", "enable_checkout", "เช็คเอาท์"]].forEach(([id, key, label]) => {
+        document.getElementById(id).addEventListener("change", async (e) => {
+          const val = e.target.checked;
+          try {
+            await saveSelfSettings({ [key]: val }, `${val ? "เปิด" : "ปิด"}${label}แล้ว`);
+          } catch (err) {
+            e.target.checked = !val;
+            showAdminToast(err.message, true);
+          }
+        });
+      });
+      document.getElementById("btn-save-schedule").addEventListener("click", async () => {
+        try {
+          await saveSelfSettings({
+            checkin_schedule: readWindow("in"),
+            checkout_schedule: readWindow("out"),
+          }, "บันทึกเวลาเปิด–ปิดแล้ว");
+          dirtyWindowInputs.clear();
+          renderSelfCard(currentSettings);
+        } catch (err) {
+          showAdminToast(err.message, true);
+        }
+      });
+
+      document.getElementById("btn-attendance-reset").addEventListener("click", async () => {
+        const input = document.getElementById("input-attendance-reset-confirm");
+        if (input.value.trim() !== "ล้างข้อมูล") {
+          showAdminToast("กรุณาพิมพ์คำว่า ล้างข้อมูล ให้ถูกต้องก่อน", true);
+          return;
+        }
+        if (!confirm("ยืนยันล้างเวลาเช็คอิน/เช็คเอาท์ของสมาชิกทุกคน? ย้อนกลับไม่ได้")) return;
+        try {
+          const res = await window.invokeEdgeFunction("admin-action", {
+            idToken: window.LiffHelper.getIdToken(),
+            admin_pin: verifiedPin,
+            action: "ATTENDANCE_RESET",
+            payload: { confirm: "ล้างข้อมูล" },
+          });
+          input.value = "";
+          showAdminToast(res.message || "ล้างข้อมูลแล้ว");
+        } catch (err) {
+          showAdminToast(err.message, true);
+        }
+      });
+
+      // Reset Lucky Draw Button Listener
+      const resetLuckyDrawBtn = document.getElementById("btn-reset-luckydraw");
+      if (resetLuckyDrawBtn) {
+        resetLuckyDrawBtn.addEventListener("click", async () => {
+          if (!confirm("⚠️ ต้องการล้างรายชื่อผู้ได้รับรางวัล Lucky Draw ทั้งหมดเพื่อเริ่มสุ่มใหม่ ใช่หรือไม่?")) {
+            return;
+          }
+          try {
+            const res = await window.invokeEdgeFunction("admin-action", {
+              idToken: window.LiffHelper.getIdToken(),
+              admin_pin: verifiedPin,
+              action: "LUCKY_DRAW_RESET",
+            });
+            showAdminToast(res.message || "รีเซ็ตรายชื่อผู้ได้รับรางวัลแล้ว");
+          } catch (err) {
+            showAdminToast(err.message, true);
+          }
+        });
+      }
+
+      // Save Text Settings (Event Name, Dynamic QR Interval, Announcement Banner, Theme, Helpdesk)
+      document.getElementById("form-text-settings").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        try {
+          const payload = {
+            event_name: document.getElementById("input-event-name").value.trim(),
+            dynamic_qr_interval_sec: parseInt(document.getElementById("input-qr-interval").value, 10) || 20,
+            announcement_text: document.getElementById("input-announcement").value.trim() || null,
+            theme_color: document.getElementById("input-theme-hex")?.value.trim() || "#006699",
+            helpdesk_contact: document.getElementById("input-helpdesk-contact")?.value.trim() || null,
+          };
+          const res = await window.invokeEdgeFunction("admin-action", {
+            idToken: window.LiffHelper.getIdToken(),
+            admin_pin: verifiedPin,
+            action: "UPDATE_SETTINGS",
+            payload,
+          });
+          renderToggles(res.settings);
+          showAdminToast("บันทึกการตั้งค่าระบบเรียบร้อยแล้ว");
+        } catch (err) {
+          showAdminToast(err.message, true);
+        }
+      });
+
+      // Add Staff Role Form
+      document.getElementById("form-add-staff").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const uid = document.getElementById("input-staff-uid").value.trim();
+        const name = document.getElementById("input-staff-name").value.trim();
+        const role = document.getElementById("select-staff-role").value;
+
+        try {
+          const res = await window.invokeEdgeFunction("admin-action", {
+            idToken: window.LiffHelper.getIdToken(),
+            admin_pin: verifiedPin,
+            action: "MANAGE_STAFF",
+            payload: {
+              sub_action: "UPSERT",
+              line_user_id: uid,
+              display_name: name,
+              role,
+            },
+          });
+          document.getElementById("input-staff-uid").value = "";
+          document.getElementById("input-staff-name").value = "";
+          renderStaffList(res.staff_list);
+          showAdminToast(`บันทึกสิทธิ์ ${name} (${role}) สำเร็จ`);
+        } catch (err) {
+          showAdminToast(err.message, true);
+        }
+      });
+
+      // Helpdesk Member Search & Override Actions
+      function renderHelpdeskMembers(members) {
+        const box = document.getElementById("helpdesk-results");
+        if (!members || members.length === 0) {
+          box.innerHTML = `<p class="text-xs text-rose-600 text-center py-4">ไม่พบข้อมูลสมาชิกที่ค้นหา</p>`;
+          return;
+        }
+
+        box.innerHTML = members
+          .map((m) => {
+            const fullName = `${m.prefix || ""}${m.first_name} ${m.last_name}`.trim();
+            const isBound = Boolean(m.line_user_id);
+            const isCheckedIn = Boolean(m.checked_in_at);
+            const isSouvenir = Boolean(m.souvenir_received_at);
+            const isMeal = Boolean(m.meal_voucher_received_at);
+            return `
+              <div class="p-4 rounded-xl bg-white border border-slate-200 space-y-3">
+                <div class="flex items-start justify-between">
+                  <div>
+                    <span class="px-2 py-0.5 rounded bg-amber-500/20 text-amber-600 font-mono text-xs font-bold">${m.member_no}</span>
+                    <span class="ml-1.5 text-sm font-bold text-slate-800">${fullName}</span>
+                    <p class="text-[11px] text-slate-500 mt-1 leading-relaxed">
+                      สถานะ: <strong>${m.person_status}</strong> |
+                      LINE: <strong class="${isBound ? "text-emerald-400" : "text-slate-500"}">${isBound ? "ผูกแล้ว" : "ยังไม่ผูก"}</strong> |
+                      เช็คอิน: <strong class="${isCheckedIn ? "text-emerald-400" : "text-amber-400"}">${isCheckedIn ? window.formatThaiDateTime(m.checked_in_at) : "ยัง"}</strong><br/>
+                      ของที่ระลึก: <strong class="${isSouvenir ? "text-emerald-400" : "text-slate-500"}">${isSouvenir ? "รับแล้ว" : "ยัง"}</strong> |
+                      คูปองอาหาร: <strong class="${isMeal ? "text-emerald-400" : "text-slate-500"}">${isMeal ? "รับแล้ว" : "ยัง"}</strong>
+                    </p>
+                  </div>
+                </div>
+                <div class="flex flex-wrap gap-1.5 pt-1">
+                  <button type="button" data-override="RESET_LINE" data-member="${m.member_no}"
+                    class="px-2.5 py-1 rounded-lg bg-amber-600/20 hover:bg-amber-600/30 border border-amber-500/40 text-amber-600 text-xs font-semibold">
+                    🔓 รีเซ็ต LINE
+                  </button>
+                  <button type="button" data-override="UPDATE_PHONE" data-member="${m.member_no}"
+                    class="px-2.5 py-1 rounded-lg bg-sky-600/20 hover:bg-sky-600/30 border border-sky-500/40 text-mwa-blue text-xs font-semibold">
+                    📱 แก้ไขเบอร์โทร
+                  </button>
+                  <button type="button" data-override="MANUAL_CHECKIN" data-member="${m.member_no}"
+                    class="px-2.5 py-1 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-600 text-xs font-semibold">
+                    ✅ เช็คอิน
+                  </button>
+                  <button type="button" data-override="${isSouvenir ? 'RESET_SOUVENIR' : 'MANUAL_SOUVENIR'}" data-member="${m.member_no}"
+                    class="px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/40 text-amber-600 text-xs font-semibold">
+                    🎁 ${isSouvenir ? 'ยกเลิกของที่ระลึก' : 'บันทึกของที่ระลึก'}
+                  </button>
+                  <button type="button" data-override="${isMeal ? 'RESET_MEAL' : 'MANUAL_MEAL'}" data-member="${m.member_no}"
+                    class="px-2.5 py-1 rounded-lg bg-teal-500/20 hover:bg-teal-500/30 border border-teal-400/40 text-teal-600 text-xs font-semibold">
+                    🍱 ${isMeal ? 'ยกเลิกคูปองอาหาร' : 'บันทึกคูปองอาหาร'}
+                  </button>
+                  <button type="button" data-override="RESET_CHECKIN" data-member="${m.member_no}"
+                    class="px-2.5 py-1 rounded-lg bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/40 text-rose-600 text-xs font-semibold">
+                    🔄 รีเซ็ตเช็คอิน
+                  </button>
+                </div>
+              </div>
+            `;
+          })
+          .join("");
+
+        box.querySelectorAll("button[data-override]").forEach((btn) => {
+          btn.addEventListener("click", async () => {
+            const overrideType = btn.getAttribute("data-override");
+            const memberNo = btn.getAttribute("data-member");
+            const payload = { member_no: memberNo, override_type: overrideType };
+
+            if (overrideType === "UPDATE_PHONE") {
+              const newPhone = prompt(`กรอกหมายเลขโทรศัพท์ใหม่ 10 หลักสำหรับสมาชิก ${memberNo}:`);
+              if (!newPhone) return;
+              const normPhone = window.normalizePhone(newPhone);
+              if (normPhone.length < 9 || normPhone.length > 10) {
+                alert("กรุณากรอกเบอร์โทรศัพท์ 9-10 หลัก");
+                return;
+              }
+              payload.new_phone = normPhone;
+              payload.new_phone_hash = await window.hashMemberPhoneClient(memberNo, normPhone);
+            }
+
+            try {
+              const res = await window.invokeEdgeFunction("admin-action", {
+                idToken: window.LiffHelper.getIdToken(),
+                admin_pin: verifiedPin,
+                action: "MEMBER_OVERRIDE",
+                payload,
+              });
+              renderHelpdeskMembers([res.member]);
+              showAdminToast(`ดำเนินการ ${overrideType} สำหรับสมาชิก ${memberNo} สำเร็จ`);
+            } catch (err) {
+              showAdminToast(err.message, true);
+            }
+          });
+        });
+      }
+
+      document.getElementById("form-helpdesk-search").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const q = document.getElementById("input-helpdesk-query").value.trim();
+        if (!q) return;
+        try {
+          const res = await window.invokeEdgeFunction("admin-action", {
+            idToken: window.LiffHelper.getIdToken(),
+            admin_pin: verifiedPin,
+            action: "MEMBER_SEARCH",
+            payload: { query: q },
+          });
+          renderHelpdeskMembers(res.members);
+        } catch (err) {
+          showAdminToast(err.message, true);
+        }
+      });
+
+      // Sample CSV Download
+      document.getElementById("btn-download-sample-csv").addEventListener("click", () => {
+        const sampleCsv = [
+          "เลขสมาชิก,ชื่อ-นามสกุล",
+          "00001,สมชาย สายชลชื่น",
+          "00002,วารี ศรีประปา",
+          "00003,เกษม เปรมปรีดิ์",
+          "00004,กมลวรรณ ธาราใส",
+        ].join("\n");
+        const blob = new Blob(["\uFEFF" + sampleCsv], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "mwa_seminar_members_sample.csv";
+        a.click();
+      });
+
+      // Bulk CSV Import (PapaParse + Client-side SHA-256 Hashing in batches of 500)
+      document.getElementById("btn-start-csv-import").addEventListener("click", () => {
+        const fileInput = document.getElementById("input-csv-file");
+        const file = fileInput.files?.[0];
+        if (!file) {
+          showAdminToast("กรุณาเลือกไฟล์ CSV ก่อนเริ่มนำเข้าข้อมูล", true);
+          return;
+        }
+
+        const progressBox = document.getElementById("csv-progress-box");
+        const statusLabel = document.getElementById("csv-status-label");
+        const pctLabel = document.getElementById("csv-progress-pct");
+        const bar = document.getElementById("csv-progress-bar");
+        progressBox.classList.remove("hidden");
+
+        // Thai or English column names → internal field names
+        const HEADER_ALIASES = {
+          member_no: ["member_no", "เลขทะเบียน", "เลขสมาชิก", "เลขที่สมาชิก", "รหัสสมาชิก"],
+          prefix: ["prefix", "คำนำหน้า", "คำนำหน้าชื่อ"],
+          first_name: ["first_name", "ชื่อ"],
+          last_name: ["last_name", "นามสกุล"],
+          phone: ["phone", "เบอร์โทรศัพท์", "เบอร์โทร", "โทรศัพท์", "มือถือ"],
+          status: ["status", "person_status", "ประเภทสมาชิก", "ประเภท"],
+          full_name: ["full_name", "name", "ชื่อ-นามสกุล", "ชื่อ - นามสกุล", "ชื่อ นามสกุล", "ชื่อและนามสกุล", "ชื่อ-สกุล"],
+        };
+        // "นายสมชาย ใจดี" -> prefix "นาย", first "สมชาย", last "ใจดี"
+        const NAME_PREFIXES = ["นางสาว", "น.ส.", "นาย", "นาง", "ว่าที่ ร.ต.", "ร.ต.", "ร.ท.", "ร.อ.", "ดร.", "Mr.", "Mrs.", "Ms.", "Miss"];
+        const splitFullName = (raw) => {
+          let s = String(raw || "").replace(/\s+/g, " ").trim();
+          let prefix = "";
+          for (const p of NAME_PREFIXES) {
+            if (s.toLowerCase().startsWith(p.toLowerCase()) && s.length > p.length) {
+              prefix = s.slice(0, p.length); s = s.slice(p.length).trim(); break;
+            }
+          }
+          const i = s.indexOf(" ");
+          return i < 0 ? { prefix, first: s, last: "" } : { prefix, first: s.slice(0, i), last: s.slice(i + 1) };
+        };
+        const headerKey = (h) => {
+          const clean = String(h || "").replace(/^﻿/, "").trim();
+          for (const [key, names] of Object.entries(HEADER_ALIASES)) {
+            if (names.some((n) => n.toLowerCase() === clean.toLowerCase())) return key;
+          }
+          return clean;
+        };
+        const normStatus = (s) => {
+          const t = String(s || "").toUpperCase();
+          if (t.includes("RETIRED") || String(s || "").includes("เกษียณ")) return "RETIRED";
+          return "ACTIVE_MWA";
+        };
+
+        Papa.parse(file, {
+          header: true,
+          skipEmptyLines: true,
+          transformHeader: headerKey,
+          complete: async (results) => {
+            const rawRows = results.data || [];
+            if (rawRows.length === 0) {
+              showAdminToast("ไม่พบข้อมูลในไฟล์ CSV", true);
+              return;
+            }
+
+            try {
+              statusLabel.textContent = `กำลังเข้ารหัส SHA-256 เบอร์โทรศัพท์ ${rawRows.length.toLocaleString()} รายการ...`;
+              const hashedRows = [];
+              const skipped = [];
+              const seen = new Set();
+              for (let i = 0; i < rawRows.length; i++) {
+                const r = rawRows[i];
+                const memberNo = window.normalizeMemberNo(r.member_no || "");
+                let first = (r.first_name || "").trim();
+                let last = (r.last_name || "").trim();
+                let prefix = (r.prefix || "").trim();
+                if ((!first || !last) && r.full_name) {
+                  const n = splitFullName(r.full_name);
+                  first = first || n.first; last = last || n.last; prefix = prefix || n.prefix;
+                }
+                if (!memberNo || !first || !last || seen.has(memberNo)) {
+                  skipped.push(i + 2); // spreadsheet row number (row 1 = header)
+                  continue;
+                }
+                seen.add(memberNo);
+                // phone is optional (only used by the old LINE registration); without it the
+                // row gets a placeholder hash that can never match a real phone
+                const phone = window.normalizePhone(r.phone || "");
+                const phoneHash = phone
+                  ? await window.hashMemberPhoneClient(memberNo, phone)
+                  : "0".repeat(64);
+                hashedRows.push({
+                  member_no: memberNo,
+                  prefix,
+                  first_name: first,
+                  last_name: last,
+                  phone_hash: phoneHash,
+                  status: normStatus(r.status),
+                });
+              }
+
+              if (hashedRows.length === 0) {
+                throw new Error("ไม่พบแถวที่ใช้ได้ ต้องมีคอลัมน์ เลขสมาชิก และ ชื่อ, นามสกุล (หรือ ชื่อ-นามสกุล)");
+              }
+              if (!confirm(
+                `จะนำเข้า ${hashedRows.length} ท่าน` + (skipped.length ? ` (ข้าม ${skipped.length} แถวที่ข้อมูลไม่ครบหรือซ้ำ)` : "") +
+                `\n\nรายชื่อในระบบจะเป็นไปตามไฟล์นี้: สมาชิกที่ไม่อยู่ในไฟล์จะถูกลบออก พร้อมข้อมูลเช็คอินของคนนั้น\nดำเนินการต่อ?`
+              )) {
+                statusLabel.textContent = "ยกเลิกการนำเข้า ไม่มีการเปลี่ยนแปลง";
+                return;
+              }
+
+              // Batch in chunks of 500 rows
+              const batchSize = 500;
+              let totalImported = 0;
+              const totalBatches = Math.ceil(hashedRows.length / batchSize);
+
+              for (let b = 0; b < totalBatches; b++) {
+                const chunk = hashedRows.slice(b * batchSize, (b + 1) * batchSize);
+                statusLabel.textContent = `กำลังอัปโหลด Batch ที่ ${b + 1} / ${totalBatches} (${chunk.length} รายการ)...`;
+                const res = await window.invokeEdgeFunction("admin-action", {
+                  idToken: window.LiffHelper.getIdToken(),
+                  admin_pin: verifiedPin,
+                  action: "BULK_IMPORT",
+                  payload: { rows: chunk, batch_index: b + 1 },
+                });
+                totalImported += res.imported_count || chunk.length;
+                const pct = Math.round(((b + 1) / totalBatches) * 100);
+                pctLabel.textContent = `${pct}%`;
+                bar.style.width = `${pct}%`;
+              }
+
+              // Every row is in: now drop members that are not in this file (roster = file)
+              statusLabel.textContent = "กำลังปรับรายชื่อให้ตรงกับไฟล์...";
+              const sync = await window.invokeEdgeFunction("admin-action", {
+                idToken: window.LiffHelper.getIdToken(),
+                admin_pin: verifiedPin,
+                action: "ROSTER_SYNC",
+                payload: { keep_member_nos: hashedRows.map((r) => r.member_no) },
+              });
+
+              statusLabel.textContent = `✅ นำเข้าสำเร็จ ${totalImported.toLocaleString()} รายการ · ลบรายชื่อที่ไม่อยู่ในไฟล์ ${sync.removed || 0} รายการ` +
+                (skipped.length ? ` · ข้ามแถวที่ ${skipped.slice(0, 15).join(", ")}${skipped.length > 15 ? " …" : ""}` : "");
+              showAdminToast(`นำเข้ารายชื่อสำเร็จ ${totalImported.toLocaleString()} รายการ`);
+              loadRoster();
+            } catch (err) {
+              statusLabel.textContent = `❌ เกิดข้อผิดพลาด: ${err.message}`;
+              showAdminToast(err.message, true);
+            }
+          },
+        });
+      });
+
+      // PDPA Data Purge Execution
+      document.getElementById("btn-execute-purge").addEventListener("click", async () => {
+        const phrase = document.getElementById("input-purge-confirm").value.trim();
+        if (phrase !== "CONFIRM_PURGE_EVENT_DATA") {
+          showAdminToast('กรุณาพิมพ์คำว่า "CONFIRM_PURGE_EVENT_DATA" ให้ถูกต้องทุกตัวอักษร', true);
+          return;
+        }
+
+        if (!confirm("คำเตือนสุดท้าย: ข้อมูลชื่อ-นามสกุล เบอร์โทร และ LINE ID ของสมาชิกทั้งหมดจะถูกลบอย่างถาวร ยืนยันหรือไม่?")) {
+          return;
+        }
+
+        try {
+          const res = await window.invokeEdgeFunction("admin-action", {
+            idToken: window.LiffHelper.getIdToken(),
+            admin_pin: verifiedPin,
+            action: "PDPA_PURGE",
+            payload: { confirmation_phrase: phrase },
+          });
+          document.getElementById("input-purge-confirm").value = "";
+          showAdminToast(`${res.message} (จำนวน ${res.purged_records} รายการ)`);
+        } catch (err) {
+          showAdminToast(err.message, true);
+        }
+      });
+
+      // Initialize LINE Auth on Admin Load
+      async function bootstrap() {
+        const auth = await window.LiffHelper.init(
+          window.APP_CONFIG.LIFF_ID_ADMIN,
+          "ADMIN",
+        );
+        if (!auth) return;
+
+        document.getElementById("gate-line-name").textContent = auth.profile.displayName;
+        document.getElementById("gate-line-uid").textContent = auth.profile.userId;
+      }
+
+      bootstrap();
+    })();
+  </script>
+</body>
+</html>
