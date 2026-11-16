@@ -133,9 +133,9 @@
     </section>
 
     <!-- SOUVENIR & MEAL VOUCHER TRACKING ROW -->
-    <section class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+    <section id="claim-row" class="hidden grid grid-cols-1 sm:grid-cols-2 gap-5">
       <!-- Souvenir Claim Card -->
-      <div class="bg-white border border-amber-500/30 rounded-2xl p-5 shadow-xl flex items-center justify-between">
+      <div id="card-souvenir" class="hidden bg-white border border-amber-500/30 rounded-2xl p-5 shadow-xl flex items-center justify-between">
         <div>
           <span class="text-xs font-semibold text-amber-600 uppercase tracking-wider block">🎁 ของที่ระลึกที่แจกแล้ว</span>
           <div class="mt-2 flex items-baseline gap-2">
@@ -150,7 +150,7 @@
       </div>
 
       <!-- Meal Voucher Claim Card -->
-      <div class="bg-white border border-emerald-500/30 rounded-2xl p-5 shadow-xl flex items-center justify-between">
+      <div id="card-meal" class="hidden bg-white border border-emerald-500/30 rounded-2xl p-5 shadow-xl flex items-center justify-between">
         <div>
           <span class="text-xs font-semibold text-emerald-600 uppercase tracking-wider block">🍱 อาหารว่างที่แจกแล้ว (หลังเช็คเอาท์)</span>
           <div class="mt-2 flex items-baseline gap-2">
@@ -357,6 +357,15 @@
         const totalOut = summary.total_checked_out || 0;
         const activeCount = summary.active_mwa_count || 0;
         const retiredCount = summary.retired_count || 0;
+
+        // follow the admin switches: show a claim card only while its feature is ON
+        const st = summary.settings || {};
+        const showSouv = st.enable_souvenir_claim === true, showMeal = st.enable_meal_claim === true;
+        document.getElementById("card-souvenir").classList.toggle("hidden", !showSouv);
+        document.getElementById("card-meal").classList.toggle("hidden", !showMeal);
+        const row = document.getElementById("claim-row");
+        row.classList.toggle("hidden", !showSouv && !showMeal);
+        row.classList.toggle("sm:grid-cols-2", showSouv && showMeal);
 
         if (summary.settings?.event_name) {
           document.getElementById("dashboard-event-name").textContent = summary.settings.event_name;
