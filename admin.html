@@ -713,6 +713,7 @@
           </tr>`;
         }).join("") : `<tr><td colspan="6" class="py-6 text-center text-slate-500">${rosterData.length ? "ไม่พบรายชื่อที่ค้นหา" : "ยังไม่มีรายชื่อในระบบ"}</td></tr>`;
       }
+      window.loadRoster = loadRoster;
       async function loadRoster() {
         try {
           const res = await window.invokeEdgeFunction("admin-action", {
@@ -965,6 +966,7 @@
           });
           input.value = "";
           showAdminToast(res.message || "ล้างข้อมูลแล้ว");
+          if (window.loadRoster) window.loadRoster();
         } catch (err) {
           showAdminToast(err.message, true);
         }
@@ -1342,6 +1344,7 @@
           });
           document.getElementById("input-purge-confirm").value = "";
           showAdminToast(`${res.message} (จำนวน ${res.purged_records} รายการ)`);
+          if (window.loadRoster) window.loadRoster();
         } catch (err) {
           showAdminToast(err.message, true);
         }
