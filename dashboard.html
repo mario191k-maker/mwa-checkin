@@ -287,7 +287,7 @@
           // redraw when someone checks in/out, or at least every 30 s
           const sig = `${d.total}|${d.checked_in}|${d.checked_out}`;
           if (sig === lastSig && Date.now() - lastFull < 30000) return;
-          if (lastSig && sig !== lastSig && typeof fetchAttendanceSummary === "function") fetchAttendanceSummary();
+          if (lastSig && sig !== lastSig && typeof window.fetchAttendanceSummary === "function") window.fetchAttendanceSummary();
           lastSig = sig; lastFull = Date.now();
           document.getElementById("att-in").textContent = d.checked_in;
           document.getElementById("att-total").textContent = d.total;
@@ -530,6 +530,7 @@
 
         // Poll every 10 seconds as backup / zero-drop guarantee
         setInterval(fetchAttendanceSummary, 30000);
+        window.fetchAttendanceSummary = fetchAttendanceSummary;
       }
 
       document.getElementById("btn-manual-refresh").addEventListener("click", fetchAttendanceSummary);
