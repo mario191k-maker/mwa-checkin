@@ -16,6 +16,8 @@ window.APP_CONFIG = {
     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBqenhiY3RpdGVhZm1pb21ua2ZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQ0NTA2NDAsImV4cCI6MjExMDAyNjY0MH0.hc9a_z6DoV__u0R008ZbO_plNkCV5WxBD7geDAqcSLM",
 
   // LINE Front-end Framework (LIFF v2) IDs per screen (can share a single LIFF ID or separate)
+  // LIFF app for the member check-in page (self.html). Empty = no LINE, members just type.
+  LIFF_ID_SELF: localStorage.getItem("MWA_CFG_LIFF_SELF") || "",
   LIFF_ID_MEMBER:
     localStorage.getItem("MWA_CFG_LIFF_MEMBER") || "2000000000-member01",
   LIFF_ID_STAFF:
