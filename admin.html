@@ -734,6 +734,24 @@
       document.getElementById("roster-search").addEventListener("input", renderRoster);
       document.getElementById("btn-roster-refresh").addEventListener("click", loadRoster);
 
+      // Auto-refresh the roster: every 30 s, or right away when a check-in/out happens
+      // (a cheap public count check runs every 5 s; the full list reloads only on change).
+      let rosterSig = "", rosterLastFull = 0;
+      setInterval(async () => {
+        if (!rosterLoadedOnce || document.hidden) return;
+        let changed = false;
+        try {
+          const d = await window.invokeEdgeFunction("checkin", { mode: "ATTENDANCE_LIST" });
+          const sig = `${d.total}|${d.checked_in}|${d.checked_out}`;
+          changed = rosterSig !== "" && sig !== rosterSig;
+          rosterSig = sig;
+        } catch (_) {}
+        if (changed || Date.now() - rosterLastFull >= 30000) {
+          rosterLastFull = Date.now();
+          loadRoster();
+        }
+      }, 5000);
+
       function renderStaffList(list) {
         const container = document.getElementById("staff-list-container");
         if (!list || list.length === 0) {

@@ -279,9 +279,16 @@
     (function () {
       function esc(s) { const d = document.createElement("div"); d.textContent = s == null ? "" : String(s); return d.innerHTML; }
       function hhmm(iso) { try { return iso ? new Date(iso).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }) : ""; } catch (_) { return ""; } }
+      let lastSig = "", lastFull = 0;
       async function loadRoster() {
+        if (document.hidden) return;
         try {
           const d = await window.invokeEdgeFunction("checkin", { mode: "ATTENDANCE_LIST" });
+          // redraw when someone checks in/out, or at least every 30 s
+          const sig = `${d.total}|${d.checked_in}|${d.checked_out}`;
+          if (sig === lastSig && Date.now() - lastFull < 30000) return;
+          if (lastSig && sig !== lastSig && typeof fetchAttendanceSummary === "function") fetchAttendanceSummary();
+          lastSig = sig; lastFull = Date.now();
           document.getElementById("att-in").textContent = d.checked_in;
           document.getElementById("att-total").textContent = d.total;
           document.getElementById("att-out").textContent = d.checked_out;
@@ -296,7 +303,7 @@
         } catch (_) { /* keep last data on network blips */ }
       }
       loadRoster();
-      setInterval(loadRoster, 10000);
+      setInterval(loadRoster, 5000);
     })();
   </script>
   <script>
@@ -522,7 +529,7 @@
         }
 
         // Poll every 10 seconds as backup / zero-drop guarantee
-        setInterval(fetchAttendanceSummary, 10000);
+        setInterval(fetchAttendanceSummary, 30000);
       }
 
       document.getElementById("btn-manual-refresh").addEventListener("click", fetchAttendanceSummary);
