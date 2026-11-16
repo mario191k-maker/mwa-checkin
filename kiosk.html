@@ -214,7 +214,7 @@
     try {
       var r = await window.invokeEdgeFunction("checkin", { mode: "SELF_TOKEN", action_type: action, pin: pin });
       var box = $("qr"); box.innerHTML = "";
-      new QRCode(box, { text: ((window.APP_CONFIG && window.APP_CONFIG.LIFF_ID_SELF) ? "https://liff.line.me/" + window.APP_CONFIG.LIFF_ID_SELF + "?t=" : base + "self.html?t=") + encodeURIComponent(r.self_token), width: 300, height: 300, correctLevel: QRCode.CorrectLevel.H });
+      new QRCode(box, { text: ((r.line_liff && window.APP_CONFIG && window.APP_CONFIG.LIFF_ID_SELF) ? "https://liff.line.me/" + window.APP_CONFIG.LIFF_ID_SELF + "?l=1&t=" : base + "self.html?t=") + encodeURIComponent(r.self_token), width: 300, height: 300, correctLevel: QRCode.CorrectLevel.H });
       if (r.server_now) clockSkew = Date.parse(r.server_now) - Date.now();
       status = r.status || null;
       paintStatus();
