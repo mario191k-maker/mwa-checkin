@@ -415,6 +415,15 @@
               class="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 border border-slate-300 text-xs font-semibold text-slate-700">🔄 รีเฟรช</button>
           </div>
         </div>
+        <form id="add-member-form" class="flex flex-wrap items-center gap-2 rounded-xl bg-slate-50 border border-slate-200 p-3">
+          <span class="text-xs font-semibold text-slate-700">➕ เพิ่มสมาชิกรายคน</span>
+          <input id="add-member-no" type="text" inputmode="numeric" placeholder="เลขสมาชิก" required
+            class="px-3 py-2 rounded-xl bg-white border border-slate-300 text-xs text-slate-800 outline-none focus:border-mwa-blue w-32" />
+          <input id="add-member-name" type="text" placeholder="ชื่อ-นามสกุล เช่น นายสมชาย ใจดี" required
+            class="flex-1 min-w-[200px] px-3 py-2 rounded-xl bg-white border border-slate-300 text-xs text-slate-800 outline-none focus:border-mwa-blue" />
+          <button id="btn-add-member" type="submit"
+            class="px-4 py-2 rounded-xl bg-mwa-blue hover:opacity-90 text-white text-xs font-bold">เพิ่ม</button>
+        </form>
         <div class="overflow-x-auto max-h-[520px] overflow-y-auto">
           <table class="w-full text-xs">
             <thead class="sticky top-0 bg-white text-slate-500">
@@ -1282,6 +1291,43 @@
             }
           },
         });
+      });
+
+      // Add a single member (same server path as CSV import, but never removes anyone)
+      document.getElementById("add-member-form").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const noEl = document.getElementById("add-member-no");
+        const nameEl = document.getElementById("add-member-name");
+        const btn = document.getElementById("btn-add-member");
+        const memberNo = window.normalizeMemberNo(noEl.value || "");
+        let s = String(nameEl.value || "").replace(/\s+/g, " ").trim();
+        let prefix = "";
+        for (const p of ["นางสาว", "น.ส.", "นาย", "นาง", "ว่าที่ ร.ต.", "ร.ต.", "ร.ท.", "ร.อ.", "ดร.", "Mr.", "Mrs.", "Ms.", "Miss"]) {
+          if (s.toLowerCase().startsWith(p.toLowerCase()) && s.length > p.length) { prefix = s.slice(0, p.length); s = s.slice(p.length).trim(); break; }
+        }
+        const i = s.indexOf(" ");
+        const first = i < 0 ? s : s.slice(0, i);
+        const last = i < 0 ? "" : s.slice(i + 1);
+        if (!memberNo) { showAdminToast("กรุณากรอกเลขสมาชิก", true); return; }
+        if (!first || !last) { showAdminToast("กรุณากรอกทั้งชื่อและนามสกุล (เว้นวรรคระหว่างชื่อกับนามสกุล)", true); return; }
+        const existing = rosterData.find((m) => m.member_no === memberNo);
+        if (existing && !confirm(`เลขสมาชิก ${memberNo} มีอยู่แล้ว (${existing.first_name} ${existing.last_name})\nต้องการแก้ชื่อเป็น "${prefix}${first} ${last}" ใช่หรือไม่?`)) return;
+        btn.disabled = true;
+        try {
+          await window.invokeEdgeFunction("admin-action", {
+            idToken: window.LiffHelper.getIdToken(),
+            admin_pin: verifiedPin,
+            action: "BULK_IMPORT",
+            payload: { rows: [{ member_no: memberNo, prefix, first_name: first, last_name: last, phone_hash: "0".repeat(64), status: "ACTIVE_MWA" }] },
+          });
+          showAdminToast(`${existing ? "แก้ไข" : "เพิ่ม"}สมาชิก ${memberNo} ${prefix}${first} ${last} แล้ว`);
+          noEl.value = ""; nameEl.value = ""; noEl.focus();
+          loadRoster();
+        } catch (err) {
+          showAdminToast(err.message, true);
+        } finally {
+          btn.disabled = false;
+        }
       });
 
       // Delete all members
